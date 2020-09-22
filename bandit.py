@@ -86,4 +86,4 @@ def grad_fn(rewards, mms, eps, w):
     w.requires_grad_()
     g = avg_gain(rewards, mms, eps, w.softmax(1))
     g.backward()
-    return w.grad.clone()
+    return w.grad.clone(), g.item()

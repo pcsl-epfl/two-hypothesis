@@ -42,6 +42,7 @@ def execute(args):
     for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.eps), max_dgrad=args.max_dgrad):
 
         state['ngrad'] = internals['gradient'].norm().item()
+        state['gain'] = internals['custom']
         dynamics.append(state)
 
         if state['step'] == args.step_stop:
