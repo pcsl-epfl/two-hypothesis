@@ -73,21 +73,6 @@ def main():
     parser.add_argument("--pickle", type=str, required=True)
     args = parser.parse_args()
 
-    if args.pte is None:
-        args.pte = args.ptr
-
-    if args.chunk is None:
-        args.chunk = max(args.ptr, args.pte, args.ptk)
-
-    if args.max_wall_kernel is None:
-        args.max_wall_kernel = args.max_wall
-
-    if args.tau_over_h_kernel is None:
-        args.tau_over_h_kernel = args.tau_over_h
-
-    if args.seed_init == -1:
-        args.seed_init = args.seed_trainset
-
     torch.save(args, args.pickle)
     saved = False
     try:
