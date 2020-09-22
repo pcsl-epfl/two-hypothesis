@@ -42,6 +42,7 @@ def execute(args):
     dynamics = []
 
     wall_print = perf_counter()
+    wall_save = perf_counter()
 
     for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.eps), max_dgrad=args.max_dgrad):
 
@@ -54,12 +55,25 @@ def execute(args):
             wall_print = perf_counter()
             print("wall={0[wall]:.0f} step={0[step]} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state), flush=True)
 
+        save = False
+        stop = False
+
+        if perf_counter() - wall_save > 10:
+            wall_save = perf_counter()
+            save = True
+
         if state['step'] == args.step_stop:
+            save = True
+            stop = True
+
+        if save:
             yield {
                 'args': args,
                 'dynamics': dynamics,
                 'pi': internals['variables'].softmax(1),
             }
+
+        if stop:
             return
 
 
