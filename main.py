@@ -3,6 +3,7 @@ import argparse
 import os
 import subprocess
 from functools import partial
+from time import perf_counter
 
 import torch
 
@@ -21,6 +22,7 @@ def prob(f, arms, ss, s, a):
 
 
 def execute(args):
+    wall = perf_counter()
     torch.set_default_dtype(torch.float64)
     torch.manual_seed(args.seed)
 
@@ -39,11 +41,18 @@ def execute(args):
     w = torch.randn(len(states), len(actions)).mul(1).to(device=args.device)
     dynamics = []
 
+    wall_print = perf_counter()
+
     for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.eps), max_dgrad=args.max_dgrad):
 
+        state['wall'] = perf_counter() - wall
         state['ngrad'] = internals['gradient'].norm().item()
         state['gain'] = internals['custom']
         dynamics.append(state)
+
+        if perf_counter() - wall_print > 2:
+            wall_print = perf_counter()
+            print("wall={0[wall]:.0f} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[G]:.3f}".format(state))
 
         if state['step'] == args.step_stop:
             yield {
