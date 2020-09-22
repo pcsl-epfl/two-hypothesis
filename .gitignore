@@ -1,0 +1,4 @@
+*.pkl
+info
+stderr
+__pycache__

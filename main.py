@@ -52,7 +52,7 @@ def execute(args):
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
-            print("wall={0[wall]:.0f} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state))
+            print("wall={0[wall]:.0f} step={0[step]} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state), flush=True)
 
         if state['step'] == args.step_stop:
             yield {
@@ -90,8 +90,8 @@ def main():
         for res in execute(args):
             res['git'] = git
             with open(args.pickle, 'wb') as f:
-                torch.save(args, f)
-                torch.save(res, f)
+                torch.save(args, f, _use_new_zipfile_serialization=False)
+                torch.save(res, f, _use_new_zipfile_serialization=False)
                 saved = True
     except:
         if not saved:
