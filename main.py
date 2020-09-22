@@ -45,11 +45,12 @@ def execute(args):
         dynamics.append(state)
 
         if state['step'] == args.step_stop:
-            return {
+            yield {
                 'args': args,
                 'dynamics': dynamics,
                 'pi': internals['variables'].softmax(1),
             }
+            return
 
 
 def main():
