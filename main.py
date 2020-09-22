@@ -84,7 +84,7 @@ def main():
     parser.add_argument("--pickle", type=str, required=True)
     args = parser.parse_args()
 
-    torch.save(args, args.pickle)
+    torch.save(args, args.pickle, _use_new_zipfile_serialization=False)
     saved = False
     try:
         for res in execute(args):
