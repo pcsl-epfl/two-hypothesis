@@ -52,7 +52,7 @@ def execute(args):
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
-            print("wall={0[wall]:.0f} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[G]:.3f}".format(state))
+            print("wall={0[wall]:.0f} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state))
 
         if state['step'] == args.step_stop:
             yield {
