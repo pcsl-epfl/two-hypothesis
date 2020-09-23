@@ -71,19 +71,22 @@ def uniform_grid(n):
     return fs
 
 
-def avg_gain(rewards, mms, eps, pi):
+def avg_gain(rewards, mms, reset, eps, pi):
+    r = pi.new_ones(len(pi), len(pi)) / len(pi)  # reset transfer matrix
+
     g = 0
     for mm in mms:
         m = transfer_matrix(pi, mm)
+        m = (1 - reset) * m + reset * r
         p = steadystate(m, eps)
         g += torch.dot(rewards, p)
     g = g / len(mms)
     return g
 
 
-def grad_fn(rewards, mms, eps, w):
+def grad_fn(rewards, mms, reset, eps, w):
     w = w.clone()
     w.requires_grad_()
-    g = avg_gain(rewards, mms, eps, w.softmax(1))
+    g = avg_gain(rewards, mms, reset, eps, w.softmax(1))
     g.backward()
     return w.grad.clone(), g.item()

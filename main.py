@@ -44,7 +44,7 @@ def execute(args):
     wall_print = perf_counter()
     wall_save = perf_counter()
 
-    for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.eps), max_dgrad=args.max_dgrad):
+    for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.reset, args.eps), max_dgrad=args.max_dgrad):
 
         state['wall'] = perf_counter() - wall
         state['ngrad'] = internals['gradient'].norm().item()
@@ -69,6 +69,9 @@ def execute(args):
         if save:
             yield {
                 'args': args,
+                'states': states,
+                'actions': actions,
+                'arms': arms,
                 'dynamics': dynamics,
                 'pi': internals['variables'].softmax(1),
             }
@@ -90,6 +93,7 @@ def main():
     parser.add_argument("--memory", type=int, required=True)
     parser.add_argument("--arms", type=int, required=True)
     parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--reset", type=float, default=0.0)
 
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
     parser.add_argument("--eps", type=float, default=1e-8)
