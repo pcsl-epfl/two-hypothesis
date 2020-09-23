@@ -1,5 +1,6 @@
 # pylint: disable=no-member, invalid-name, not-callable, missing-docstring, line-too-long
 import argparse
+import math
 import os
 import subprocess
 from functools import partial
@@ -62,7 +63,7 @@ def execute(args):
             wall_save = perf_counter()
             save = True
 
-        if state['step'] == args.step_stop:
+        if state['step'] == args.step_stop or state['ngrad'] <= args.ngrad_stop:
             save = True
             stop = True
 
@@ -97,7 +98,9 @@ def main():
 
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
     parser.add_argument("--eps", type=float, default=1e-8)
-    parser.add_argument("--step_stop", type=int, default=1000)
+
+    parser.add_argument("--step_stop", type=int, default=math.inf)
+    parser.add_argument("--ngrad_stop", type=float, default=0.0)
 
     parser.add_argument("--pickle", type=str, required=True)
     args = parser.parse_args()
