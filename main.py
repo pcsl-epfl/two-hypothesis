@@ -12,24 +12,15 @@ from bandit import grad_fn, init, master_matrix
 from gradientflow import gradientflow_ode
 
 
-def prob(f, arms, ss, s, a):
-    # s = +1101
-    # a = A0
-    #ss = -1010
-    if ss[1:] == s[2:] + a[1]:
-        fa = f[arms.index(a[0])]
-        return fa if ss[0] == '+' else 1 - fa
-    return 0
-
-
 def execute(args):
     wall = perf_counter()
     torch.set_default_dtype(torch.float64)
     torch.manual_seed(args.seed)
 
-    states, actions, arms, rewards = init(n_arms=args.arms, mem=args.memory)
+    states, actions, arms, rewards, prob = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
     rewards = rewards.to(device=args.device)
 
+    assert args.arms == 2
     fs = torch.tensor([
         [0.5, 0.5 + args.gamma],
         [0.5, 0.5 - args.gamma],
@@ -37,9 +28,9 @@ def execute(args):
         [0.5 - args.gamma, 0.5],
     ])
 
-    mms = [master_matrix(states, actions, partial(prob, f, arms)).to(device=args.device) for f in fs]
+    mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
-    w = torch.randn(len(states), len(actions)).mul(1).to(device=args.device)
+    w = torch.randn(len(states), len(actions), device=args.device)
     dynamics = []
 
     wall_print = perf_counter()
@@ -90,11 +81,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", type=str, default='cpu')
 
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--memory_type", type=str, required=True)
     parser.add_argument("--memory", type=int, required=True)
-    parser.add_argument("--arms", type=int, required=True)
+    parser.add_argument("--arms", type=int, default=2)
     parser.add_argument("--gamma", type=float, default=0.1)
     parser.add_argument("--reset", type=float, default=0.0)
+
+    parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
     parser.add_argument("--eps", type=float, default=1e-8)
