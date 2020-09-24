@@ -30,7 +30,7 @@ def execute(args):
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
-    w = torch.randn(len(states), len(actions), device=args.device)
+    w = torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
     dynamics = []
 
     wall_print = perf_counter()
@@ -91,6 +91,7 @@ def main():
 
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
     parser.add_argument("--eps", type=float, default=1e-8)
+    parser.add_argument("--std0", type=float, default=1)
 
     parser.add_argument("--step_stop", type=int, default=math.inf)
     parser.add_argument("--ngrad_stop", type=float, default=0.0)
