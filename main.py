@@ -12,7 +12,7 @@ from bandit import grad_fn, init, master_matrix
 from gradientflow import gradientflow_ode
 
 
-def optimize(args, w, mms, rewards, stop_steps, iterator):
+def optimize(args, w, mms, rewards, stop_steps):
     wall = perf_counter()
     wall_print = perf_counter()
     wall_save = perf_counter()
@@ -48,14 +48,17 @@ def optimize(args, w, mms, rewards, stop_steps, iterator):
         }
 
         if save:
-            if iterator:
-                yield r
+            yield r
 
         if stop:
-            if not iterator:
-                return r
-            else:
-                break
+            return
+
+
+def last(i):
+    x = None
+    for x in i:
+        pass
+    return x
 
 
 def execute(args):
@@ -75,12 +78,13 @@ def execute(args):
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
-    w = torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
+    def w():
+        return torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
 
-    rs = [optimize(args, w, mms, rewards, args.trials_steps, iterator=False) for _ in range(args.trials)]
-    r = max(rs, lambda x: x['dynamics'][-1]['gain'])
+    rs = [last(optimize(args, w(), mms, rewards, args.trials_steps)) for _ in range(args.trials)]
+    r = max(rs, key=lambda r: r['dynamics'][-1]['gain'])
 
-    for r in optimize(args, r['weights'], mms, rewards, args.stop_steps, iterator=True):
+    for r in optimize(args, r['weights'], mms, rewards, args.stop_steps):
         yield {
             'args': args,
             'states': states,
@@ -100,14 +104,13 @@ def execute(args):
             mms2 = [master_matrix(states2, actions2, partial(prob2, f)).to(device=args.device) for f in fs]
             rewards2 = rewards2.to(device=args.device)
 
-        w = r['weights']
         w2 = torch.ones(len(states2), len(actions2)).mul(-100)
-        for s, line in zip(states, w):
+        for s, line in zip(states, r['weights']):
             for a, x in zip(actions, line):
                 a = a[0] + s[2:] + a[1]
-                w2[s, actions2.index(a)] = x
+                w2[states2.index(s), actions2.index(a)] = x
 
-        for r2 in optimize(args, r['weights'], mms2, rewards2, args.stop_steps, iterator=True):
+        for r2 in optimize(args, w2, mms2, rewards2, args.stop_steps):
             yield {
                 'args': args,
                 'states': states,
@@ -132,7 +135,7 @@ def main():
     parser.add_argument("--bootstrap_ram", type=int, default=0)
     parser.add_argument("--memory", type=int, required=True)
     parser.add_argument("--arms", type=int, default=2)
-    parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--gamma", type=float, default=0.4)
     parser.add_argument("--reset", type=float, default=0.0)
 
     parser.add_argument("--seed", type=int, default=0)
