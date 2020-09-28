@@ -81,8 +81,19 @@ def execute(args):
     def w():
         return torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
 
-    rs = [last(optimize(args, w(), mms, rewards, args.trials_steps)) for _ in range(args.trials)]
-    r = max(rs, key=lambda r: r['dynamics'][-1]['gain'])
+    trials_steps = args.trials_steps
+    rs = [last(optimize(args, w(), mms, rewards, trials_steps)) for _ in range(args.trials)]
+
+    while len(rs) > 1:
+        rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
+        print('best gain = {:.3f}'.format(rs[-1]['dynamics'][-1]['gain']))
+        rs = rs[len(rs) // 2:]
+        if len(rs) == 1:
+            break
+        trials_steps = round(trials_steps * 1.5)
+        rs = [last(optimize(args, r['weights'], mms, rewards, trials_steps)) for r in rs]
+
+    r = rs[0]
 
     for r in optimize(args, r['weights'], mms, rewards, args.stop_steps):
         yield {
