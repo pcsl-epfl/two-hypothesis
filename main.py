@@ -104,7 +104,7 @@ def execute(args):
             mms2 = [master_matrix(states2, actions2, partial(prob2, f)).to(device=args.device) for f in fs]
             rewards2 = rewards2.to(device=args.device)
 
-        w2 = torch.ones(len(states2), len(actions2)).mul(-100)
+        w2 = torch.ones(len(states2), len(actions2)).mul(-5)
         for s, line in zip(states, r['weights']):
             for a, x in zip(actions, line):
                 a = a[0] + s[2:] + a[1]
