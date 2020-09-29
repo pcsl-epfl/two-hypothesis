@@ -65,7 +65,14 @@ def execute(args):
     torch.set_default_dtype(torch.float64)
     torch.manual_seed(args.seed)
 
-    states, actions, arms, rewards, prob = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
+    if args.trials_memory_type == args.memory_type:
+        trials_memory = args.memory
+    if args.trials_memory_type == 'shift' and args.memory_type == 'ram':
+        trials_memory = args.memory
+    if args.trials_memory_type == 'actions' and args.memory_type == 'ram':
+        trials_memory = (args.memory + 1) // args.arms
+
+    states, actions, arms, rewards, prob = init(n_arms=args.arms, mem=trials_memory, mem_type=args.trials_memory_type)
     rewards = rewards.to(device=args.device)
 
     assert args.arms == 2
@@ -95,42 +102,50 @@ def execute(args):
 
     r = rs[0]
 
-    for r in optimize(args, r['weights'], mms, rewards, args.stop_steps):
-        yield {
-            'args': args,
-            'states': states,
-            'actions': actions,
-            'arms': arms,
-            'trials': rs,
-            'main': r,
-            'ram': None,
-        }
+    states2, actions2, arms2, rewards2, prob2 = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
+    mms2 = [master_matrix(states2, actions2, partial(prob2, f)).to(device=args.device) for f in fs]
+    rewards2 = rewards2.to(device=args.device)
 
-    if args.bootstrap_ram == 1:
-        if args.memory_type == 'shift':
-            states2, actions2, arms2, rewards2, prob2 = init(n_arms=args.arms, mem=args.memory, mem_type='ram')
-            assert states2 == states
-            assert arms2 == arms
+    if args.memory_type == args.trials_memory_type:
+        w2 = r['weights']
 
-            mms2 = [master_matrix(states2, actions2, partial(prob2, f)).to(device=args.device) for f in fs]
-            rewards2 = rewards2.to(device=args.device)
-
+    if args.memory_type == 'ram' and args.trials_memory_type == 'shift':
+        assert states2 == states
+        assert arms2 == arms
         w2 = torch.ones(len(states2), len(actions2)).mul(-5)
         for s, line in zip(states, r['weights']):
             for a, x in zip(actions, line):
                 a = a[0] + s[2:] + a[1]
                 w2[states2.index(s), actions2.index(a)] = x
 
-        for r2 in optimize(args, w2, mms2, rewards2, args.stop_steps):
-            yield {
-                'args': args,
-                'states': states,
-                'actions': actions,
-                'arms': arms,
-                'trials': rs,
-                'main': r,
-                'ram': r2,
-            }
+    if args.memory_type == 'ram' and args.trials_memory_type == 'actions':
+        assert arms2 == arms
+        w2 = torch.ones(len(states2), len(actions2)).mul(-5)
+        for s, line in zip(states, r['weights']):
+            for a, x in zip(actions, line):
+                def f(s):
+                    return s.replace('A', '0').replace('B', '1').replace('-', '0').replace('+', '1')
+                # s = ABA++-
+                # a = B
+                m = len(s) // 2
+                s2 = s[-1] + f(s[:-1])
+                a2 = a + f(s[1:m]) + f(a) + f(s[m+1:])
+                while len(s2) < args.memory + 1:
+                    s2 = s2 + '0'
+                while len(a2) < args.memory + 1:
+                    a2 = a2 + '0'
+                w2[states2.index(s2), actions2.index(a2)] = x
+
+    for r2 in optimize(args, w2, mms2, rewards2, args.stop_steps):
+        yield {
+            'args': args,
+            'states': states2,
+            'actions': actions2,
+            'arms': arms2,
+            'dynamics': r2['dynamics'],
+            'weights': r2['weights'],
+            'pi': r2['pi'],
+        }
 
 
 def main():
@@ -143,7 +158,6 @@ def main():
     parser.add_argument("--device", type=str, default='cpu')
 
     parser.add_argument("--memory_type", type=str, required=True)
-    parser.add_argument("--bootstrap_ram", type=int, default=0)
     parser.add_argument("--memory", type=int, required=True)
     parser.add_argument("--arms", type=int, default=2)
     parser.add_argument("--gamma", type=float, default=0.4)
@@ -151,19 +165,21 @@ def main():
 
     parser.add_argument("--seed", type=int, default=0)
 
-    parser.add_argument("--bootstrap", type=str, default='none')
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
     parser.add_argument("--eps", type=float, default=1e-8)
     parser.add_argument("--std0", type=float, default=1)
 
     parser.add_argument("--trials", type=int, default=1)
     parser.add_argument("--trials_steps", type=int, default=0)
+    parser.add_argument("--trials_memory_type", type=str)
 
     parser.add_argument("--stop_steps", type=int, default=1000)
-    # parser.add_argument("--stop_ngrad", type=float, default=0.0)
 
     parser.add_argument("--pickle", type=str, required=True)
     args = parser.parse_args()
+
+    if args.trials_memory_type is None:
+        args.trials_memory_type = args.memory_type
 
     torch.save(args, args.pickle, _use_new_zipfile_serialization=False)
     saved = False
