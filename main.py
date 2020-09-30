@@ -28,7 +28,7 @@ def optimize(args, w, mms, rewards, stop_steps, prefix=""):
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
-            print("wall={1}{0[wall]:.0f} step={0[step]} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state, prefix), flush=True)
+            print("{1}wall={0[wall]:.0f} step={0[step]} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state, prefix), flush=True)
 
         save = False
         stop = False
@@ -89,7 +89,7 @@ def execute(args):
         return torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
 
     trials_steps = args.trials_steps
-    rs = [last(optimize(args, w(), mms, rewards, trials_steps, prefix="TRIAL{}/{}".format(i, args.trials))) for i in range(args.trials)]
+    rs = [last(optimize(args, w(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
@@ -98,7 +98,7 @@ def execute(args):
         if len(rs) == 1:
             break
         trials_steps = round(trials_steps * 1.5)
-        rs = [last(optimize(args, r['weights'], mms, rewards, trials_steps, prefix="TRIAL{}/{}".format(i, len(rs)))) for i, r in enumerate(rs)]
+        rs = [last(optimize(args, r['weights'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
 
     r = rs[0]
 
