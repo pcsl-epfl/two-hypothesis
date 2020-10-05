@@ -45,6 +45,7 @@ def optimize(args, w, mms, rewards, stop_steps, prefix=""):
             'dynamics': dynamics,
             'weights': internals['variables'],
             'pi': internals['variables'].softmax(1),
+            'stop': stop,
         }
 
         if save:
@@ -145,6 +146,7 @@ def execute(args):
             'dynamics': r2['dynamics'],
             'weights': r2['weights'],
             'pi': r2['pi'],
+            'finished': r2['stop']
         }
 
 
