@@ -38,6 +38,10 @@ def optimize(args, w, mms, rewards, stop_steps, prefix=""):
             wall_save = perf_counter()
             save = True
 
+        if state['ngrad'] < args.stop_ngrad:
+            save = True
+            stop = True
+
         if state['step'] == stop_steps:
             save = True
             stop = True
@@ -177,6 +181,7 @@ def main():
     parser.add_argument("--trials_memory_type", type=str)
 
     parser.add_argument("--stop_steps", type=int, default=10000)
+    parser.add_argument("--stop_ngrad", type=float, default=1e-8)
 
     parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args()
