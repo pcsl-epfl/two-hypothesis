@@ -180,7 +180,7 @@ def main():
     parser.add_argument("--trials_steps", type=int, default=0)
     parser.add_argument("--trials_memory_type", type=str)
 
-    parser.add_argument("--stop_steps", type=int, default=10000)
+    parser.add_argument("--stop_steps", type=int, default=50000)
     parser.add_argument("--stop_ngrad", type=float, default=1e-8)
 
     parser.add_argument("--output", type=str, required=True)
