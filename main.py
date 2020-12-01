@@ -5,6 +5,7 @@ import os
 import subprocess
 from functools import partial
 from time import perf_counter
+import pickle
 
 import torch
 
@@ -162,7 +163,7 @@ def main():
     parser.add_argument("--memory_type", type=str, required=True)
     parser.add_argument("--memory", type=int, required=True)
     parser.add_argument("--arms", type=int, default=2)
-    parser.add_argument("--gamma", type=float, default=0.4)
+    parser.add_argument("--gamma", type=float, default=0.1)
     parser.add_argument("--reset", type=float, default=0.0)
 
     parser.add_argument("--seed", type=int, default=0)
@@ -175,23 +176,24 @@ def main():
     parser.add_argument("--trials_steps", type=int, default=0)
     parser.add_argument("--trials_memory_type", type=str)
 
-    parser.add_argument("--stop_steps", type=int, default=1000)
+    parser.add_argument("--stop_steps", type=int, default=10000)
 
-    parser.add_argument("--pickle", type=str, required=True)
+    parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args()
 
     if args.trials_memory_type is None:
         args.trials_memory_type = args.memory_type
 
-    torch.save(args, args.pickle, _use_new_zipfile_serialization=False)
+    with open(args.output, 'wb') as handle:
+        pickle.dump(args, handle)
     saved = False
     try:
-        for res in execute(args):
-            res['git'] = git
-            with open(args.pickle, 'wb') as f:
-                torch.save(args, f, _use_new_zipfile_serialization=False)
-                torch.save(res, f, _use_new_zipfile_serialization=False)
-                saved = True
+        for data in execute(args):
+            data['git'] = git
+            with open(args.output, 'wb') as handle:
+                pickle.dump(args, handle)
+                pickle.dump(data, handle)
+            saved = True
     except:
         if not saved:
             os.remove(args.pickle)
