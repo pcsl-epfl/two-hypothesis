@@ -121,9 +121,17 @@ def avg_gain(rewards, mms, reset, eps, pi):
     return g
 
 
-def grad_fn(rewards, mms, reset, eps, w):
+def grad_fn(states, rewards, mms, reset, eps, ab_sym, w):
     w = w.clone()
     w.requires_grad_()
-    g = avg_gain(rewards, mms, reset, eps, w.softmax(1))
+    if ab_sym:
+        pi = w.softmax(1)
+        pi = torch.stack([
+            pi[i] if i < len(pi) else pi[states.index(inv_action(s))].flip(0)
+            for i, s in enumerate(states)
+        ])
+    else:
+        pi = w.softmax(1)
+    g = avg_gain(rewards, mms, reset, eps, pi)
     g.backward()
     return w.grad.clone(), g.item()

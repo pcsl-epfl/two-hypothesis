@@ -13,14 +13,14 @@ from bandit import grad_fn, init, master_matrix
 from gradientflow import gradientflow_ode
 
 
-def optimize(args, w, mms, rewards, stop_steps, prefix=""):
+def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
     wall = perf_counter()
     wall_print = perf_counter()
     wall_save = perf_counter()
 
     dynamics = []
 
-    for state, internals in gradientflow_ode(w, partial(grad_fn, rewards, mms, args.reset, args.eps), max_dgrad=args.max_dgrad):
+    for state, internals in gradientflow_ode(w, partial(grad_fn, states, rewards, mms, args.reset, args.eps, args.ab_sym), max_dgrad=args.max_dgrad):
 
         state['wall'] = perf_counter() - wall
         state['ngrad'] = internals['gradient'].norm().item()
@@ -92,10 +92,10 @@ def execute(args):
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
     def w():
-        return torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
+        return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
 
     trials_steps = args.trials_steps
-    rs = [last(optimize(args, w(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
+    rs = [last(optimize(args, states, w(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
@@ -104,7 +104,7 @@ def execute(args):
         if len(rs) == 1:
             break
         trials_steps = round(trials_steps * 1.5)
-        rs = [last(optimize(args, r['weights'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
+        rs = [last(optimize(args, states, r['weights'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
 
     r = rs[0]
 
@@ -142,7 +142,7 @@ def execute(args):
                     a2 = a2 + '0'
                 w2[states2.index(s2), actions2.index(a2)] = x
 
-    for r2 in optimize(args, w2, mms2, rewards2, args.stop_steps):
+    for r2 in optimize(args, states, w2, mms2, rewards2, args.stop_steps):
         yield {
             'args': args,
             'states': states2,
@@ -182,6 +182,7 @@ def main():
 
     parser.add_argument("--stop_steps", type=int, default=50000)
     parser.add_argument("--stop_ngrad", type=float, default=1e-8)
+    parser.add_argument("--ab_sym", type=int, default=0)
 
     parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args()
