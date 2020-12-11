@@ -10,7 +10,31 @@ import pickle
 import torch
 
 from bandit import grad_fn, init, master_matrix
-from gradientflow import gradientflow_ode
+from gradientflow import flow
+
+
+def flow_ode(x, grad_fun, max_dgrad=1e-4):
+    """
+    flow for an ODE
+    """
+
+    def prepare(xx, t, old_data, old_t):
+        if old_data is not None and old_t == t:
+            return old_data
+        return grad_fun(xx)
+
+    def make_step(xx, data, _t, dt):
+        g, _ = data
+        return xx + dt * g
+
+    def compare(data1, data2):
+        g1, _ = data1
+        g2, _ = data2
+        dgrad = (g1 - g2).abs().max()
+        return dgrad.item() / max_dgrad
+
+    for state, internals in flow(x, prepare, make_step, compare):
+        yield state, internals
 
 
 def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
@@ -20,11 +44,11 @@ def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
 
     dynamics = []
 
-    for state, internals in gradientflow_ode(w, partial(grad_fn, states, rewards, mms, args.reset, args.eps, args.ab_sym), max_dgrad=args.max_dgrad):
+    for state, internals in flow_ode(w, partial(grad_fn, states, rewards, mms, args.reset, args.eps, args.ab_sym), max_dgrad=args.max_dgrad):
 
         state['wall'] = perf_counter() - wall
-        state['ngrad'] = internals['gradient'].norm().item()
-        state['gain'] = internals['custom']
+        state['ngrad'] = internals['data'][0].abs().max().item()
+        state['gain'] = internals['data'][1]
         dynamics.append(state)
 
         if perf_counter() - wall_print > 2:
@@ -48,8 +72,8 @@ def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
 
         r = {
             'dynamics': dynamics,
-            'weights': internals['variables'],
-            'pi': internals['variables'].softmax(1),
+            'weights': internals['x'],
+            'pi': internals['x'].softmax(1),
             'stop': stop,
         }
 
@@ -180,7 +204,7 @@ def main():
     parser.add_argument("--trials_steps", type=int, default=0)
     parser.add_argument("--trials_memory_type", type=str)
 
-    parser.add_argument("--stop_steps", type=int, default=50000)
+    parser.add_argument("--stop_steps", type=int, default=5000)
     parser.add_argument("--stop_ngrad", type=float, default=1e-8)
     parser.add_argument("--ab_sym", type=int, default=0)
 
@@ -202,7 +226,7 @@ def main():
             saved = True
     except:
         if not saved:
-            os.remove(args.pickle)
+            os.remove(args.output)
         raise
 
 
