@@ -116,6 +116,16 @@ def execute(args):
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
     def w():
+        if args.trials_memory_type == 'restless':
+            pi = torch.zeros(len(states), len(actions), device=args.device)
+            n = trials_memory // 2
+            pi[:n, 0] = 2
+            pi[n:2*n, 3] = 2
+            pi[2*n:3*n, 1] = 2
+            pi[3*n:, 2] = 2
+            noise = pi.clone()
+            noise.normal_().mul_(args.std0)
+            return pi + noise
         return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
 
     trials_steps = args.trials_steps
