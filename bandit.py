@@ -4,11 +4,11 @@ import torch
 
 
 def inv_action(s):
-    return s.replace('A', 'b').replace('B', 'A').replace('b', 'B')
+    return s.replace('A', '__b__').replace('B', 'A').replace('__b__', 'B')
 
 
 def inv_reward(s):
-    return s.replace('1', 'o').replace('0', '1').replace('o', '0')
+    return s.replace('1', '__z__').replace('0', '1').replace('__z__', '0')
 
 
 def str_prod(*iterators, n=1):
@@ -56,6 +56,20 @@ def init(n_arms, mem, mem_type):
                 fa = f[arms.index(a)]
                 return fa if ss[-1] == '+' else 1 - fa
             return 0
+
+    elif mem_type == 'linear':
+        actions = str_prod(arms, '<.>')
+        states = str_prod('+-', [f"{i:04d}" for i in range(mem)])
+        rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
+        def prob(f, ss, s, a):
+            # s = +0120
+            # a = A>
+            #ss = +0121
+            if (a[1] == '.' and s[1:] == ss[1:]) or (a[1] == '>' and min(int(s[1:]) + 1, mem - 1) == int(ss[1:])) or (a[1] == '<' and max(int(s[1:]) - 1, 0) == int(ss[1:])):
+                fa = f[arms.index(a[0])]
+                return fa if ss[0] == '+' else 1 - fa
+            return 0
+
 
     return states, actions, arms, rewards, prob
 
