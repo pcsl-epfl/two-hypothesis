@@ -107,8 +107,8 @@ def execute(args):
 
     assert args.arms == 2
     fs = torch.tensor([
-        [0.5 - args.gamma, 0.5 + args.gamma],
-        [0.5 + args.gamma, 0.5 - args.gamma],
+        [0.5 - args.gamma/2, 0.5 + args.gamma/2],
+        [0.5 + args.gamma/2, 0.5 - args.gamma/2],
     ])
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
@@ -118,11 +118,10 @@ def execute(args):
             pi = torch.zeros(len(states), len(actions), device=args.device).fill_(-1)
 
             for i, s in enumerate(states):
-                x = int(s[2:])
                 for j, a in enumerate(actions):
-                    if a[1] == '>' and (x[:2] in ["+B", "-A"]):
+                    if a[1] == '>' and (s[:2] in ["+B", "-A"]):
                         pi[i, j] = 1
-                    if a[1] == '<' and (x[:2] in ["+A", "-B"]):
+                    if a[1] == '<' and (s[:2] in ["+A", "-B"]):
                         pi[i, j] = 1
 
             noise = pi.clone()
