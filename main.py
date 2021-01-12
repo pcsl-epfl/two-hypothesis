@@ -117,12 +117,16 @@ def execute(args):
 
     def w():
         if args.trials_memory_type == 'restless':
-            pi = torch.zeros(len(states), len(actions), device=args.device)
-            n = trials_memory // 2
-            pi[:n, 0] = 2
-            pi[n:2*n, 3] = 2
-            pi[2*n:3*n, 1] = 2
-            pi[3*n:, 2] = 2
+            pi = torch.zeros(len(states), len(actions), device=args.device).fill_(-1)
+
+            for i, s in enumerate(states):
+                x = int(s[2:])
+                for j, a in enumerate(actions):
+                    if a[1] == '>' and (x[:2] in ["+B", "-A"]):
+                        pi[i, j] = 1
+                    if a[1] == '<' and (x[:2] in ["+A", "-B"]):
+                        pi[i, j] = 1
+
             noise = pi.clone()
             noise.normal_().mul_(args.std0)
             return pi + noise
