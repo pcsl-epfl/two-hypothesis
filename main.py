@@ -107,10 +107,8 @@ def execute(args):
 
     assert args.arms == 2
     fs = torch.tensor([
-        [0.5, 0.5 + args.gamma],
-        [0.5, 0.5 - args.gamma],
-        [0.5 + args.gamma, 0.5],
-        [0.5 - args.gamma, 0.5],
+        [0.5 - args.gamma, 0.5 + args.gamma],
+        [0.5 + args.gamma, 0.5 - args.gamma],
     ])
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
