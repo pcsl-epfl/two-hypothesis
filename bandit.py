@@ -57,30 +57,22 @@ def init(n_arms, mem, mem_type):
                 return fa if ss[-1] == '+' else 1 - fa
             return 0
 
-    elif mem_type == 'linear':
-        actions = str_prod(arms, '<.>')
-        states = str_prod('+-', [f"{i:04d}" for i in range(mem)])
-        rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
-        def prob(f, ss, s, a):
-            # s = +0120
-            # a = A>
-            #ss = +0121
-            if (a[1] == '.' and s[1:] == ss[1:]) or (a[1] == '>' and min(int(s[1:]) + 1, mem - 1) == int(ss[1:])) or (a[1] == '<' and max(int(s[1:]) - 1, 0) == int(ss[1:])):
-                fa = f[arms.index(a[0])]
-                return fa if ss[0] == '+' else 1 - fa
-            return 0
+    elif mem_type in ['linear', 'restless']:
+        if mem_type == 'linear':
+            actions = str_prod(arms, '<.>')
+        if mem_type == 'restless':
+            actions = str_prod(arms, '<>')
 
-    elif mem_type == 'restless':
-        actions = str_prod(arms, '<>')
-        states = str_prod('+-', [f"{i:04d}" for i in range(mem)])
+        states = str_prod('+-', arms, [f"{i:04d}" for i in range(mem)])
         rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
         def prob(f, ss, s, a):
-            # s = +0120
+            # s = +B0120
             # a = A>
-            #ss = +0121
-            if (a[1] == '>' and min(int(s[1:]) + 1, mem - 1) == int(ss[1:])) or (a[1] == '<' and max(int(s[1:]) - 1, 0) == int(ss[1:])):
-                fa = f[arms.index(a[0])]
-                return fa if ss[0] == '+' else 1 - fa
+            #ss = +A0121
+            if (a[1] == '.' and s[2:] == ss[2:]) or (a[1] == '>' and min(int(s[2:]) + 1, mem - 1) == int(ss[2:])) or (a[1] == '<' and max(int(s[2:]) - 1, 0) == int(ss[2:])):
+                if ss[1] == a[0]:
+                    fa = f[arms.index(a[0])]
+                    return fa if ss[0] == '+' else 1 - fa
             return 0
 
     return states, actions, arms, rewards, prob
