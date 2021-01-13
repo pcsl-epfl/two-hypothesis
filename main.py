@@ -28,8 +28,10 @@ def flow_ode(x, grad_fun, max_dgrad=1e-4):
         return xx + dt * g
 
     def compare(data1, data2):
-        g1, _ = data1
-        g2, _ = data2
+        g1, gain1 = data1
+        g2, gain2 = data2
+        if gain2 < gain1:
+            return 2
         dgrad = (g1 - g2).abs().max()
         return dgrad.item() / max_dgrad
 
