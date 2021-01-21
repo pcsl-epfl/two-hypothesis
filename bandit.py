@@ -1,6 +1,7 @@
 # pylint: disable=no-member, invalid-name, not-callable, missing-docstring
 import itertools
 import torch
+import collections
 
 
 def inv_action(s):
@@ -126,8 +127,9 @@ def uniform_grid(n):
     return fs
 
 
-def avg_gain(rewards, mms, reset, eps, pi):
+def avg_gain(rewards, mms, reset, eps, pi, p0):
     r = pi.new_ones(len(pi), len(pi)) / len(pi)  # reset transfer matrix
+    r[:, :] = p0[:, None]
 
     g = 0
     for mm in mms:
@@ -139,17 +141,24 @@ def avg_gain(rewards, mms, reset, eps, pi):
     return g
 
 
-def grad_fn(states, rewards, mms, reset, eps, ab_sym, w):
-    w = w.clone()
-    w.requires_grad_()
+def grad_fn(states, rewards, mms, reset, eps, ab_sym, w_pi, w_p0):
+    w_pi = w_pi.clone()
+    w_pi.requires_grad_()
+
     if ab_sym:
-        pi = w.softmax(1)
+        pi = w_pi.softmax(1)
         pi = torch.stack([
             pi[i] if i < len(pi) else pi[states.index(inv_action(s))].flip(0)
             for i, s in enumerate(states)
         ])
     else:
-        pi = w.softmax(1)
-    g = avg_gain(rewards, mms, reset, eps, pi)
+        pi = w_pi.softmax(1)
+
+    w_p0 = w_p0.clone()
+    w_p0.requires_grad_()
+    p0 = w_p0.softmax(0)
+
+    g = avg_gain(rewards, mms, reset, eps, pi, p0)
     g.backward()
-    return w.grad.clone(), g.item()
+
+    return collections.namedtuple("Return", "gain, pi_grad, p0_grad")(g.item(), w_pi.grad.clone(), w_p0.grad.clone())

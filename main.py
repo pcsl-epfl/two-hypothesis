@@ -21,41 +21,40 @@ def flow_ode(x, grad_fun, max_dgrad=1e-4):
     def prepare(xx, t, old_data, old_t):
         if old_data is not None and old_t == t:
             return old_data
-        return grad_fun(xx)
+        w_pi, w_p0 = xx
+        return grad_fun(w_pi, w_p0)
 
     def make_step(xx, data, _t, dt):
-        g, _ = data
-        return xx + dt * g
+        w_pi, w_p0 = xx
+        return (w_pi + dt * data.pi_grad, w_p0 + dt * data.p0_grad)
 
     def compare(data1, data2):
-        g1, gain1 = data1
-        g2, gain2 = data2
-        if gain2 < gain1:
+        if data2.gain < data1.gain:
             return 2
-        dgrad = (g1 - g2).abs().max()
+        dgrad = (data1.pi_grad - data2.pi_grad).abs().max()
         return dgrad.item() / max_dgrad
 
     for state, internals in flow(x, prepare, make_step, compare):
         yield state, internals
 
 
-def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
+def optimize(args, states, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
     wall = perf_counter()
     wall_print = perf_counter()
     wall_save = perf_counter()
 
     dynamics = []
 
-    for state, internals in flow_ode(w, partial(grad_fn, states, rewards, mms, args.reset, args.eps, args.ab_sym), max_dgrad=args.max_dgrad):
+    for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, states, rewards, mms, args.reset, args.eps, args.ab_sym), max_dgrad=args.max_dgrad):
 
-        state['wall'] = perf_counter() - wall
-        state['ngrad'] = internals['data'][0].abs().max().item()
-        state['gain'] = internals['data'][1]
-        dynamics.append(state)
+        s['wall'] = perf_counter() - wall
+        s['ngrad'] = internals['data'].pi_grad.abs().max().item()
+        s['gain'] = internals['data'].gain
+        dynamics.append(s)
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
-            print("{1}wall={0[wall]:.0f} step={0[step]} t=({0[t]:.1e})+({0[dt]:.0e}) |dw|={0[ngrad]:.1e} G={0[gain]:.3f}".format(state, prefix), flush=True)
+            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} 1-G/G*={1 - s['gain'] / args.gamma:.3f}", flush=True)
 
         save = False
         stop = False
@@ -64,18 +63,20 @@ def optimize(args, states, w, mms, rewards, stop_steps, prefix=""):
             wall_save = perf_counter()
             save = True
 
-        if state['ngrad'] < args.stop_ngrad:
+        if s['ngrad'] < args.stop_ngrad:
             save = True
             stop = True
 
-        if state['step'] == stop_steps:
+        if s['step'] == stop_steps:
             save = True
             stop = True
 
         r = {
             'dynamics': dynamics,
-            'weights': internals['x'],
-            'pi': internals['x'].softmax(1),
+            'w_pi': internals['x'][0],
+            'w_p0': internals['x'][1],
+            'pi': internals['x'][0].softmax(1),
+            'p0': internals['x'][1].softmax(0),
             'stop': stop,
         }
 
@@ -115,24 +116,27 @@ def execute(args):
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
-    def w():
-        if args.trials_memory_type == 'restless':
-            pi = torch.zeros(len(states), len(actions), device=args.device).fill_(-1)
+    def w_pi():
+        # if args.trials_memory_type == 'restless':
+        #     pi = torch.zeros(len(states), len(actions), device=args.device).fill_(-1)
 
-            for i, s in enumerate(states):
-                for j, a in enumerate(actions):
-                    if a[1] == '>' and (s[:2] in ["+B", "-A"]):
-                        pi[i, j] = 1
-                    if a[1] == '<' and (s[:2] in ["+A", "-B"]):
-                        pi[i, j] = 1
+        #     for i, s in enumerate(states):
+        #         for j, a in enumerate(actions):
+        #             if a[1] == '>' and (s[:2] in ["+B", "-A"]):
+        #                 pi[i, j] = 1
+        #             if a[1] == '<' and (s[:2] in ["+A", "-B"]):
+        #                 pi[i, j] = 1
 
-            noise = pi.clone()
-            noise.normal_().mul_(args.std0)
-            return pi + noise
+        #     noise = pi.clone()
+        #     noise.normal_().mul_(args.std0)
+        #     return pi + noise
         return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
 
+    def w_p0():
+        return torch.randn(len(states), device=args.device).mul(args.std0)
+
     trials_steps = args.trials_steps
-    rs = [last(optimize(args, states, w(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
+    rs = [last(optimize(args, states, w_pi(), w_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
@@ -141,7 +145,7 @@ def execute(args):
         if len(rs) == 1:
             break
         trials_steps = round(trials_steps * 1.5)
-        rs = [last(optimize(args, states, r['weights'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
+        rs = [last(optimize(args, states, r['w_pi'], r['w_p0'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
 
     r = rs[0]
 
@@ -150,13 +154,13 @@ def execute(args):
     rewards2 = rewards2.to(device=args.device)
 
     if args.memory_type == args.trials_memory_type:
-        w2 = r['weights']
+        w2 = r['w_pi']
 
     if args.memory_type == 'ram' and args.trials_memory_type == 'shift':
         assert states2 == states
         assert arms2 == arms
         w2 = torch.ones(len(states2), len(actions2)).mul(-5)
-        for s, line in zip(states, r['weights']):
+        for s, line in zip(states, r['w_pi']):
             for a, x in zip(actions, line):
                 a = a[0] + s[2:] + a[1]
                 w2[states2.index(s), actions2.index(a)] = x
@@ -164,7 +168,7 @@ def execute(args):
     if args.memory_type == 'ram' and args.trials_memory_type == 'actions':
         assert arms2 == arms
         w2 = torch.ones(len(states2), len(actions2)).mul(-5)
-        for s, line in zip(states, r['weights']):
+        for s, line in zip(states, r['w_pi']):
             for a, x in zip(actions, line):
                 def f(s):
                     return s.replace('A', '0').replace('B', '1').replace('-', '0').replace('+', '1')
@@ -179,14 +183,14 @@ def execute(args):
                     a2 = a2 + '0'
                 w2[states2.index(s2), actions2.index(a2)] = x
 
-    for r2 in optimize(args, states, w2, mms2, rewards2, args.stop_steps):
+    for r2 in optimize(args, states, w2, r['w_p0'], mms2, rewards2, args.stop_steps):
         yield {
             'args': args,
             'states': states2,
             'actions': actions2,
             'arms': arms2,
             'dynamics': r2['dynamics'],
-            'weights': r2['weights'],
+            'w_pi': r2['w_pi'],
             'pi': r2['pi'],
             'finished': r2['stop']
         }
