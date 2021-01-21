@@ -31,8 +31,9 @@ def flow_ode(x, grad_fun, max_dgrad=1e-4):
     def compare(data1, data2):
         if data2.gain < data1.gain:
             return 2
-        dgrad = (data1.pi_grad - data2.pi_grad).abs().max()
-        return dgrad.item() / max_dgrad
+        dpi = (data1.pi_grad - data2.pi_grad).abs().max().item()
+        dp0 = (data1.p0_grad - data2.p0_grad).abs().max().item()
+        return (dpi + dp0) / max_dgrad
 
     for state, internals in flow(x, prepare, make_step, compare):
         yield state, internals
@@ -50,11 +51,12 @@ def optimize(args, states, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
         s['wall'] = perf_counter() - wall
         s['ngrad'] = internals['data'].pi_grad.abs().max().item()
         s['gain'] = internals['data'].gain
+        s['loss'] = 1 - internals['data'].gain / args.gamma
         dynamics.append(s)
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
-            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} 1-G/G*={1 - s['gain'] / args.gamma:.3f}", flush=True)
+            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} loss={s['loss']:.3f}", flush=True)
 
         save = False
         stop = False
