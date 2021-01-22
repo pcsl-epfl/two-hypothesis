@@ -9,7 +9,7 @@ import pickle
 
 import torch
 
-from bandit import grad_fn, init, master_matrix
+from bandit import grad_fn, init, master_matrix, steadystate, transfer_matrix
 from gradientflow import flow
 
 
@@ -196,6 +196,7 @@ def execute(args):
             'w_p0': r2['w_p0'],
             'pi': r2['pi'],
             'p0': r2['p0'],
+            'steadystates': [steadystate(transfer_matrix(r2['pi'], mm, args.reset, r2['p0']), args.eps) for mm in mms2],
             'finished': r2['stop']
         }
 

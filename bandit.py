@@ -102,8 +102,13 @@ def master_matrix(states, actions, prob):
     return mm
 
 
-def transfer_matrix(pi, mm):
-    return torch.einsum('ja,ija->ij', pi, mm)
+def transfer_matrix(pi, mm, reset, p0):
+    r = pi.new_zeros(len(pi), len(pi))
+    r[:len(p0), :] = p0[:, None]
+
+    m = torch.einsum('ja,ija->ij', pi, mm)
+    m = (1 - reset) * m + reset * r
+    return m
 
 
 def steadystate(m, eps=1e-6):
@@ -134,13 +139,9 @@ def uniform_grid(n):
 
 
 def avg_gain(rewards, mms, reset, eps, pi, p0):
-    r = pi.new_zeros(len(pi), len(pi))
-    r[:len(p0), :] = p0[:, None]
-
     g = 0
     for mm in mms:
-        m = transfer_matrix(pi, mm)
-        m = (1 - reset) * m + reset * r
+        m = transfer_matrix(pi, mm, reset, p0)
         p = steadystate(m, eps)
         g += torch.dot(rewards, p)
     g = g / len(mms)
