@@ -19,6 +19,8 @@ def str_prod(*iterators, n=1):
 def init(n_arms, mem, mem_type):
     arms = tuple('ABCDEFGH'[:n_arms])
 
+    n_init_states = 0
+
     if mem_type == 'shift':
         actions = str_prod(arms, '01')
         states = str_prod('+-', str_prod('01', n=mem))
@@ -64,8 +66,9 @@ def init(n_arms, mem, mem_type):
         if mem_type == 'restless':
             actions = str_prod(arms, '<>')
 
-        states = str_prod('+-', arms, [f"{i:04d}" for i in range(mem)])
-        rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
+        states = str_prod(('0 ',) + str_prod('+-', arms), [f"{i:02d}" for i in range(mem)])
+        n_init_states = mem
+        rewards = torch.tensor([{'+': 1.0, '-': -1.0, '0': 0}[s[0]] for s in states])
         def prob(f, ss, s, a):
             # s = +B0120
             # a = A>
@@ -76,7 +79,10 @@ def init(n_arms, mem, mem_type):
                     return fa if ss[0] == '+' else 1 - fa
             return 0
 
-    return states, actions, arms, rewards, prob
+    if n_init_states == 0:
+        n_init_states = len(states)
+
+    return states, actions, arms, rewards, prob, n_init_states
 
 
 def master_matrix(states, actions, prob):
@@ -128,8 +134,8 @@ def uniform_grid(n):
 
 
 def avg_gain(rewards, mms, reset, eps, pi, p0):
-    r = pi.new_ones(len(pi), len(pi)) / len(pi)  # reset transfer matrix
-    r[:, :] = p0[:, None]
+    r = pi.new_zeros(len(pi), len(pi))
+    r[:len(p0), :] = p0[:, None]
 
     g = 0
     for mm in mms:

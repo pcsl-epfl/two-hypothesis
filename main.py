@@ -107,7 +107,7 @@ def execute(args):
     if args.trials_memory_type == 'actions' and args.memory_type == 'ram':
         trials_memory = (args.memory + 1) // args.arms
 
-    states, actions, arms, rewards, prob = init(n_arms=args.arms, mem=trials_memory, mem_type=args.trials_memory_type)
+    states, actions, arms, rewards, prob, n_init_states = init(n_arms=args.arms, mem=trials_memory, mem_type=args.trials_memory_type)
     rewards = rewards.to(device=args.device)
 
     assert args.arms == 2
@@ -135,7 +135,7 @@ def execute(args):
         return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
 
     def w_p0():
-        return torch.randn(len(states), device=args.device).mul(args.std0)
+        return torch.randn(n_init_states, device=args.device).mul(args.std0)
 
     trials_steps = args.trials_steps
     rs = [last(optimize(args, states, w_pi(), w_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
@@ -151,7 +151,7 @@ def execute(args):
 
     r = rs[0]
 
-    states2, actions2, arms2, rewards2, prob2 = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
+    states2, actions2, arms2, rewards2, prob2, n_init_states = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
     mms2 = [master_matrix(states2, actions2, partial(prob2, f)).to(device=args.device) for f in fs]
     rewards2 = rewards2.to(device=args.device)
 
