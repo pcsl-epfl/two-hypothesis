@@ -193,7 +193,9 @@ def execute(args):
             'arms': arms2,
             'dynamics': r2['dynamics'],
             'w_pi': r2['w_pi'],
+            'w_p0': r2['w_p0'],
             'pi': r2['pi'],
+            'p0': r2['p0'],
             'finished': r2['stop']
         }
 
