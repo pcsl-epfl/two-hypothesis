@@ -119,23 +119,52 @@ def execute(args):
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
 
     def w_pi():
-        # if args.trials_memory_type == 'restless':
-        #     pi = torch.zeros(len(states), len(actions), device=args.device).fill_(-1)
+        if args.init == 'randn':
+            return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
+        if args.init == 'u_shape':
+            e = 0.64 * args.reset ** 0.5
+            pi = torch.zeros(len(states), len(actions))
+            for i, s in enumerate(states):
+                x = int(s[2:])
 
-        #     for i, s in enumerate(states):
-        #         for j, a in enumerate(actions):
-        #             if a[1] == '>' and (s[:2] in ["+B", "-A"]):
-        #                 pi[i, j] = 1
-        #             if a[1] == '<' and (s[:2] in ["+A", "-B"]):
-        #                 pi[i, j] = 1
+                if x == trials_memory - 1:
+                    if s[:2] == "+A":
+                        pi[i] = torch.tensor([1, 0, 0, 0])
+                    if s[:2] == "+B":
+                        pi[i] = torch.tensor([0, 0, 1, 0])
+                    if s[0] == "-":
+                        pi[i] = torch.tensor([0, 1/2, 0, 1/2])
 
-        #     noise = pi.clone()
-        #     noise.normal_().mul_(args.std0)
-        #     return pi + noise
-        return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
+                elif x == 0:
+                    if s[:2] == "+A":
+                        pi[i] = torch.tensor([1, 0, 0, 0])
+                    if s[:2] == "+B":
+                        pi[i] = torch.tensor([0, 0, 1, 0])
+                    if s[:2] == "-A":
+                        pi[i] = torch.tensor([1-e, e, 0, 0])
+                    if s[:2] == "-B":
+                        pi[i] = torch.tensor([0, 0, 1-e, e])
+
+                else:
+                    if s[:2] == "+A":
+                        pi[i] = torch.tensor([1, 0, 0, 0])
+                    if s[:2] == "+B":
+                        pi[i] = torch.tensor([0, 0, 1, 0])
+                    if s[:2] == "-A":
+                        pi[i] = torch.tensor([0, 1, 0, 0])
+                    if s[:2] == "-B":
+                        pi[i] = torch.tensor([0, 0, 0, 1])
+
+            pi[:trials_memory] = torch.tensor([0, 0.5, 0, 0.5])
+            return (pi + 1e-3).log()
 
     def w_p0():
-        return torch.randn(n_init_states, device=args.device).mul(args.std0)
+        if args.init == 'randn':
+            return torch.randn(n_init_states, device=args.device).mul(args.std0)
+        if args.init == 'u_shape':
+            p0 = torch.zeros(n_init_states)
+            p0[trials_memory-1] = 1
+            return (p0 + 1e-3).log()
 
     trials_steps = args.trials_steps
     rs = [last(optimize(args, states, w_pi(), w_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
@@ -209,6 +238,8 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", type=str, default='cpu')
+
+    parser.add_argument("--init", type=str, default='randn')
 
     parser.add_argument("--memory_type", type=str, required=True)
     parser.add_argument("--memory", type=int, required=True)
