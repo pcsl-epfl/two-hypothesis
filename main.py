@@ -13,26 +13,26 @@ from bandit import grad_fn, init, master_matrix, steadystate, transfer_matrix
 from gradientflow import flow
 
 
-def flow_ode(x, grad_fun, max_dgrad=1e-4):
+def flow_ode(x, grad_fun, max_dgrad):
     """
     flow for an ODE
     """
 
-    def prepare(xx, t, old_data, old_t):
-        if old_data is not None and old_t == t:
-            return old_data
+    def prepare(xx, t, post, post_t):
+        if post is not None and post_t == t:
+            return post
         w_pi, w_p0 = xx
         return grad_fun(w_pi, w_p0)
 
-    def make_step(xx, data, _t, dt):
+    def make_step(xx, pre, _t, dt):
         w_pi, w_p0 = xx
-        return (w_pi + dt * data.pi_grad, w_p0 + dt * data.p0_grad)
+        return (w_pi + dt * pre.pi_grad, w_p0 + dt * pre.p0_grad)
 
-    def compare(data1, data2):
-        if data2.gain < data1.gain:
+    def compare(pre, post):
+        if post.gain < pre.gain:
             return 2
-        dpi = (data1.pi_grad - data2.pi_grad).abs().max().item()
-        dp0 = (data1.p0_grad - data2.p0_grad).abs().max().item()
+        dpi = (pre.pi_grad - post.pi_grad).abs().max().item()
+        dp0 = (pre.p0_grad - post.p0_grad).abs().max().item()
         return (dpi + dp0) / max_dgrad
 
     for state, internals in flow(x, prepare, make_step, compare):
