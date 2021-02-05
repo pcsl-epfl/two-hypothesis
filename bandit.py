@@ -49,8 +49,11 @@ def init(n_arms, mem, mem_type):
 
     elif mem_type == 'actions':
         actions = arms
-        states = str_prod(str_prod(arms, n=mem), str_prod('+-', n=mem))
-        rewards = torch.tensor([1.0 if s[-1] == '+' else -1.0 for s in states])
+        states = []
+        for n in range(mem + 1):
+            states += str_prod([" " * (mem - n)], str_prod(arms, n=n), [" " * (mem - n)], str_prod("+-", n=n))
+        n_init_states = 1
+        rewards = torch.tensor([{'+': +1.0, '-': -1.0, ' ': 0.0}[s[-1]] for s in states])
         def prob(f, ss, s, a):
             # s = AAB++-
             # a = B
