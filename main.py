@@ -121,6 +121,7 @@ def execute(args):
     def w_pi():
         if args.init == 'randn':
             return torch.randn(len(states) // 2 if args.ab_sym else len(states), len(actions), device=args.device).mul(args.std0)
+
         if args.init == 'u_shape':
             e = 0.64 * args.reset ** 0.5
             pi = torch.zeros(len(states), len(actions))
@@ -158,9 +159,31 @@ def execute(args):
             pi[:trials_memory] = torch.tensor([0, 0.5, 0, 0.5])
             return (pi + 1e-3).log()
 
+        if args.init == 'randn_u_shape':
+            pi = torch.zeros(len(states), len(actions))
+            for i, s in enumerate(states):
+                x = int(s[2:])
+
+                if x == trials_memory - 1:
+                    pi[i] = torch.tensor([1, 1, 1, 1.0])
+
+                else:
+                    if s[:2] == "+A":
+                        pi[i] = torch.tensor([1, 1, 0, 0.0])
+                    if s[:2] == "+B":
+                        pi[i] = torch.tensor([0, 0, 1, 1.0])
+                    if s[:2] == "-A":
+                        pi[i] = torch.tensor([1, 1, 0, 0.0])
+                    if s[:2] == "-B":
+                        pi[i] = torch.tensor([0, 0, 1, 1.0])
+
+            pi[:trials_memory] = torch.tensor([1, 1, 1, 1.0])
+            return torch.randn(pi.shape, device=args.device).mul(args.std0) + 7 * pi
+
     def w_p0():
-        if args.init == 'randn':
+        if args.init == 'randn' or args.init == 'randn_u_shape':
             return torch.randn(n_init_states, device=args.device).mul(args.std0)
+
         if args.init == 'u_shape':
             p0 = torch.zeros(n_init_states)
             p0[trials_memory-1] = 1
