@@ -239,7 +239,7 @@ def execute(args):
 
     for r2 in optimize(args, states, w2, r['w_p0'], mms2, rewards2, args.stop_steps):
         yield {
-            'args': args,
+            'args': args.__dict__,
             'states': states2,
             'actions': actions2,
             'arms': arms2,
