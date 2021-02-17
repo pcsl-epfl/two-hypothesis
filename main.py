@@ -180,8 +180,24 @@ def execute(args):
             pi[:trials_memory] = torch.tensor([1, 1, 1, 1.0])
             return torch.randn(pi.shape, device=args.device).mul(args.std0) + 7 * pi
 
+        if args.init == 'cycles':
+            pi = torch.zeros(len(states), len(actions))
+            pi.fill_(0.5)
+            m = trials_memory
+
+            for i, s in enumerate(states):
+                x = torch.tensor([{'A': 1.0, 'B': -1.0, '+': 1.0, '-': -1.0}[i] for i in s])
+                if (x[:m] * x[m:]).var() > 0.0:
+                    if s[0] == 'A':
+                        pi[i] = torch.tensor([1.0, 0.0])
+                    if s[0] == 'B':
+                        pi[i] = torch.tensor([0.0, 1.0])
+
+            r = pi.clone().uniform_(1e-3, 3e-3)
+            return (pi + r).log()
+
     def w_p0():
-        if args.init == 'randn' or args.init == 'randn_u_shape':
+        if args.init == 'randn' or args.init == 'randn_u_shape' or args.init == 'cycles':
             return torch.randn(n_init_states, device=args.device).mul(args.std0)
 
         if args.init == 'u_shape':
