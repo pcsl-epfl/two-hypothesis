@@ -186,7 +186,7 @@ def execute(args):
             m = trials_memory
 
             for i, s in enumerate(states):
-                x = torch.tensor([{'A': 1.0, 'B': -1.0, '+': 1.0, '-': -1.0}[i] for i in s])
+                x = torch.tensor([{'A': 1.0, 'B': -1.0, '+': 1.0, '-': -1.0, ' ': 0.0}[i] for i in s])
                 if (x[:m] * x[m:]).var() > 0.0:
                     if s[0] == 'A':
                         pi[i] = torch.tensor([1.0, 0.0])
