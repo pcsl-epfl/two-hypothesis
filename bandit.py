@@ -116,12 +116,10 @@ def transfer_matrix(pi, mm, reset, p0):
 
 def steadystate(m, eps=1e-6):
     for _ in itertools.count():
-        m_ = m @ m
+        m = m @ m
 
-        if (m_ - m).abs().max().item() < eps:
+        if (m - m[:, [0]]).abs().max().item() < eps:
             return m[:, 0]
-
-        m = m_
 
 
 def uniform_grid(n):
