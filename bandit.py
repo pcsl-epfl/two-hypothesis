@@ -115,23 +115,13 @@ def transfer_matrix(pi, mm, reset, p0):
 
 
 def steadystate(m, eps=1e-6):
-    p = m.new_ones(len(m)) / len(m)
-
     for _ in itertools.count():
-        m = m @ m
+        m_ = m @ m
 
-        for _ in range(2):
-            p_ = m @ p
+        if (m_ - m).abs().max().item() < eps:
+            return m[:, 0]
 
-            d = (p_ - p).abs().max().item()
-            p = p_
-
-            if d < eps:
-                break
-        if d < eps:
-            break
-
-    return p
+        m = m_
 
 
 def uniform_grid(n):
