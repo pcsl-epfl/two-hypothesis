@@ -8,10 +8,6 @@ def inv_action(s):
     return s.replace('A', '__b__').replace('B', 'A').replace('__b__', 'B')
 
 
-def inv_reward(s):
-    return s.replace('1', '__z__').replace('0', '1').replace('__z__', '0')
-
-
 def str_prod(*iterators, n=1):
     return tuple([''.join(x) for x in itertools.product(*iterators, repeat=n)])
 
@@ -21,30 +17,32 @@ def init(n_arms, mem, mem_type):
 
     n_init_states = 0
 
-    if mem_type == 'shift':
-        actions = str_prod(arms, '01')
-        states = str_prod('+-', str_prod('01', n=mem))
-        rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
-        def prob(f, ss, s, a):
-            # s = +1101
-            # a = A0
-            #ss = -1010
-            if ss[1:] == s[2:] + a[1]:
-                fa = f[arms.index(a[0])]
-                return fa if ss[0] == '+' else 1 - fa
-            return 0
+    # if mem_type == 'shift':
+    #     actions = str_prod(arms, '01')
+    #     states = str_prod('+-', str_prod('01', n=mem))
+    #     rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
+    #     def prob(f, ss, s, a):
+    #         # s = +1101
+    #         # a = A0
+    #         #ss = -1010
+    #         if ss[1:] == s[2:] + a[1]:
+    #             fa = f[arms.index(a[0])]
+    #             return fa if ss[0] == '+' else 1 - fa
+    #         return 0
 
-    elif mem_type == 'ram':
-        actions = str_prod(arms, str_prod('01', n=mem))
-        states = str_prod('+-', str_prod('01', n=mem))
-        rewards = torch.tensor([1.0 if s[0] == '+' else -1.0 for s in states])
+    if mem_type == 'ram':
+        mem_states = [f"{i:02d}" for i in range(mem)]
+        actions = str_prod(mem_states, arms)
+        states = str_prod(mem_states, ['  ']) + str_prod(mem_states, arms, '+-')
+        n_init_states = len(mem_states)
+        rewards = torch.tensor([{'+': +1.0, '-': -1.0, ' ': 0.0}[s[-1]] for s in states])
         def prob(f, ss, _s, a):
-            # s = +1101
-            # a = A0110
-            #ss = -0110
-            if ss[1:] == a[1:]:
-                fa = f[arms.index(a[0])]
-                return fa if ss[0] == '+' else 1 - fa
+            # s = 44A+
+            # a = 32B
+            #ss = 32B-
+            if ss[:-1] == a:
+                fa = f[arms.index(a[-1])]
+                return fa if ss[-1] == '+' else 1 - fa
             return 0
 
     elif mem_type == 'actions':
@@ -63,24 +61,24 @@ def init(n_arms, mem, mem_type):
                 return fa if ss[-1] == '+' else 1 - fa
             return 0
 
-    elif mem_type in ['linear', 'restless']:
-        if mem_type == 'linear':
-            actions = str_prod(arms, '<.>')
-        if mem_type == 'restless':
-            actions = str_prod(arms, '<>')
+    # elif mem_type in ['linear', 'restless']:
+    #     if mem_type == 'linear':
+    #         actions = str_prod(arms, '<.>')
+    #     if mem_type == 'restless':
+    #         actions = str_prod(arms, '<>')
 
-        states = str_prod(('0 ',) + str_prod('+-', arms), [f"{i:02d}" for i in range(mem)])
-        n_init_states = mem
-        rewards = torch.tensor([{'+': 1.0, '-': -1.0, '0': 0}[s[0]] for s in states])
-        def prob(f, ss, s, a):
-            # s = +B0120
-            # a = A>
-            #ss = +A0121
-            if (a[1] == '.' and s[2:] == ss[2:]) or (a[1] == '>' and min(int(s[2:]) + 1, mem - 1) == int(ss[2:])) or (a[1] == '<' and max(int(s[2:]) - 1, 0) == int(ss[2:])):
-                if ss[1] == a[0]:
-                    fa = f[arms.index(a[0])]
-                    return fa if ss[0] == '+' else 1 - fa
-            return 0
+    #     states = str_prod(('0 ',) + str_prod('+-', arms), [f"{i:02d}" for i in range(mem)])
+    #     n_init_states = mem
+    #     rewards = torch.tensor([{'+': 1.0, '-': -1.0, '0': 0}[s[0]] for s in states])
+    #     def prob(f, ss, s, a):
+    #         # s = +B0120
+    #         # a = A>
+    #         #ss = +A0121
+    #         if (a[1] == '.' and s[2:] == ss[2:]) or (a[1] == '>' and min(int(s[2:]) + 1, mem - 1) == int(ss[2:])) or (a[1] == '<' and max(int(s[2:]) - 1, 0) == int(ss[2:])):
+    #             if ss[1] == a[0]:
+    #                 fa = f[arms.index(a[0])]
+    #                 return fa if ss[0] == '+' else 1 - fa
+    #         return 0
 
     if n_init_states == 0:
         n_init_states = len(states)
@@ -122,13 +120,6 @@ def steadystate(m, eps=1e-6):
             return m[:, 0]
 
 
-def uniform_grid(n):
-    a = 1 / (2 + 2 * n)
-    f = torch.linspace(a, 1.0 - a, n)
-    fs = torch.stack(torch.meshgrid(f, f), dim=-1).reshape(-1, 2)
-    return fs
-
-
 def avg_gain(rewards, mms, reset, eps, pi, p0):
     g = 0
     for mm in mms:
@@ -139,18 +130,10 @@ def avg_gain(rewards, mms, reset, eps, pi, p0):
     return g
 
 
-def grad_fn(states, rewards, mms, reset, eps, ab_sym, w_pi, w_p0):
+def grad_fn(rewards, mms, reset, eps, w_pi, w_p0):
     w_pi = w_pi.clone()
     w_pi.requires_grad_()
-
-    if ab_sym:
-        pi = w_pi.softmax(1)
-        pi = torch.stack([
-            pi[i] if i < len(pi) else pi[states.index(inv_action(s))].flip(0)
-            for i, s in enumerate(states)
-        ])
-    else:
-        pi = w_pi.softmax(1)
+    pi = w_pi.softmax(1)
 
     w_p0 = w_p0.clone()
     w_p0.requires_grad_()
