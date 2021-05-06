@@ -46,12 +46,12 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
 
     dynamics = []
 
-    for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, rewards, mms, args.reset, args.eps), max_dgrad=args.max_dgrad):
+    for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, rewards, mms, args['reset'], args['eps']), max_dgrad=args['max_dgrad']):
 
         s['wall'] = perf_counter() - wall
         s['ngrad'] = internals['data'].pi_grad.abs().max().item()
         s['gain'] = internals['data'].gain
-        s['loss'] = 1 - internals['data'].gain / args.gamma
+        s['loss'] = 1 - internals['data'].gain / args['gamma']
         dynamics.append(s)
 
         if perf_counter() - wall_print > 2:
@@ -65,7 +65,7 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
             wall_save = perf_counter()
             save = True
 
-        if s['ngrad'] < args.stop_ngrad:
+        if s['ngrad'] < args['stop_ngrad']:
             save = True
             stop = True
 
@@ -108,28 +108,28 @@ def optimal_u(r, mu, m):
 
 def execute(args):
     torch.set_default_dtype(torch.float64)
-    torch.manual_seed(args.seed)
+    torch.manual_seed(args['seed'])
 
-    states, actions, arms, rewards, prob, n_init_states = init(n_arms=args.arms, mem=args.memory, mem_type=args.memory_type)
-    rewards = rewards.to(device=args.device)
+    states, actions, arms, rewards, prob, n_init_states = init(n_arms=args['arms'], mem=args['memory'], mem_type=args['memory_type'])
+    rewards = rewards.to(device=args['device'])
 
-    assert args.arms == 2
+    assert args['arms'] == 2
     fs = torch.tensor([
-        [0.5 - args.gamma/2, 0.5 + args.gamma/2],
-        [0.5 + args.gamma/2, 0.5 - args.gamma/2],
+        [0.5 - args['gamma']/2, 0.5 + args['gamma']/2],
+        [0.5 + args['gamma']/2, 0.5 - args['gamma']/2],
     ])
 
-    mms = [master_matrix(states, actions, partial(prob, f)).to(device=args.device) for f in fs]
+    mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
 
     def w_pi_p0():
-        if args.init == 'randn':
-            pi = torch.randn(len(states), len(actions), device=args.device).mul(args.std0)
-            p0 = torch.randn(n_init_states, device=args.device).mul(args.std0)
+        if args['init'] == 'randn':
+            pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
+            p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
             return pi, p0
 
-        if args.init == 'optimal_u':
-            assert args.memory_type == 'ram'
-            e, _ = optimal_u(args.reset, args.gamma, args.memory)
+        if args['init'] == 'optimal_u':
+            assert args['memory_type'] == 'ram'
+            e, _ = optimal_u(args['reset'], args['gamma'], args['memory'])
             e = min(e, 1)
             pi = torch.zeros(len(states), len(actions))
             for i, s in enumerate(states):
@@ -140,7 +140,7 @@ def execute(args):
                 if s[2:] == "  ":
                     continue
 
-                if x == args.memory - 1:
+                if x == args['memory'] - 1:
                     if s[-1] == "+":
                         pi[i, actions.index(s[:-1])] = 1.0
                     else:
@@ -168,8 +168,8 @@ def execute(args):
             p0[states.index("00  ")] = 1
             return (pi + 1e-3).log(), (p0 + 1e-3).log()
 
-        # if args.init == 'cycles':
-        #     assert args.memory_type == 'actions'
+        # if args['init'] == 'cycles':
+        #     assert args['memory_type'] == 'actions'
         #     pi = torch.zeros(len(states), len(actions))
         #     pi.fill_(0.5)
         #     m = trials_memory
@@ -185,8 +185,8 @@ def execute(args):
         #     r = pi.clone().uniform_(1e-3, 3e-3)
         #     return (pi + r).log()
 
-    trials_steps = args.trials_steps
-    rs = [last(optimize(args, *w_pi_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args.trials))) for i in range(args.trials)]
+    trials_steps = args['trials_steps']
+    rs = [last(optimize(args, *w_pi_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
@@ -197,9 +197,9 @@ def execute(args):
         trials_steps = round(trials_steps * 1.5)
         rs = [last(optimize(args, r['w_pi'], r['w_p0'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
 
-    for r in optimize(args, rs[0]['w_pi'], rs[0]['w_p0'], mms, rewards, args.stop_steps):
+    for r in optimize(args, rs[0]['w_pi'], rs[0]['w_p0'], mms, rewards, args['stop_steps']):
         yield {
-            'args': args.__dict__,
+            'args': args,
             'states': states,
             'actions': actions,
             'arms': arms,
@@ -208,7 +208,7 @@ def execute(args):
             'w_p0': r['w_p0'],
             'pi': r['pi'],
             'p0': r['p0'],
-            'steadystates': [steadystate(transfer_matrix(r['pi'], mm, args.reset, r['p0']), args.eps) for mm in mms],
+            'steadystates': [steadystate(transfer_matrix(r['pi'], mm, args['reset'], r['p0']), args['eps']) for mm in mms],
             'finished': r['stop']
         }
 
@@ -243,21 +243,21 @@ def main():
     parser.add_argument("--stop_ngrad", type=float, default=1e-8)
 
     parser.add_argument("--output", type=str, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args().__dict__
 
-    with open(args.output, 'wb') as handle:
+    with open(args['output'], 'wb') as handle:
         pickle.dump(args, handle)
     saved = False
     try:
         for data in execute(args):
             data['git'] = git
-            with open(args.output, 'wb') as handle:
+            with open(args['output'], 'wb') as handle:
                 pickle.dump(args, handle)
                 pickle.dump(data, handle)
             saved = True
     except:
         if not saved:
-            os.remove(args.output)
+            os.remove(args['output'])
         raise
 
 
