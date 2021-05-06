@@ -161,7 +161,8 @@ def execute(args):
                     if s[-1] == "-":
                         pi[i, actions.index(f"{x-1:02d}{s[-2]}")] = 1.0
 
-            pi[states.index("00  "), actions.index("00A")] = 1.0
+            pi[states.index("00  "), actions.index("00A")] = 0.5
+            pi[states.index("00  "), actions.index("00B")] = 0.5
 
             p0 = torch.zeros(n_init_states)
             p0[states.index("00  ")] = 1
