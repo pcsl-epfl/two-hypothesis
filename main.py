@@ -130,6 +130,7 @@ def execute(args):
         if args.init == 'optimal_u':
             assert args.memory_type == 'ram'
             e, _ = optimal_u(args.reset, args.gamma, args.memory)
+            e = min(e, 1)
             pi = torch.zeros(len(states), len(actions))
             for i, s in enumerate(states):
                 # s = 44A+
