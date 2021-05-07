@@ -108,7 +108,7 @@ def optimal_u(r, mu, m):
     return eps, q
 
 
-def w_pi_p0(args, states, actions, n_init_states):
+def w_pi_p0(args, states, actions, n_init_states, eps):
     if args['init'] == 'randn':
         pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
@@ -153,7 +153,7 @@ def w_pi_p0(args, states, actions, n_init_states):
 
         p0 = torch.zeros(n_init_states, device=args['device'])
         p0[states.index("00  ")] = 1
-        return (pi + 1e-4).log(), (p0 + 1e-4).log()
+        return (pi + eps).log(), (p0 + eps).log()
 
     if args['init'] == 'randn_lin':
         assert args['memory_type'] == 'ram'
@@ -168,7 +168,7 @@ def w_pi_p0(args, states, actions, n_init_states):
                     pi[i, j] = 0.0
 
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-        pi = (pi / pi.sum(1, True) + 1e-3).log()
+        pi = (pi / pi.sum(1, True) + eps).log()
         assert torch.isfinite(pi).all()
         return pi, p0
 
@@ -188,7 +188,7 @@ def w_pi_p0(args, states, actions, n_init_states):
                     pi[i, j] = 0.0
 
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-        pi = (pi / pi.sum(1, True) + 1e-3).log()
+        pi = (pi / pi.sum(1, True) + eps).log()
         assert torch.isfinite(pi).all()
         return pi, p0
 
@@ -213,7 +213,7 @@ def w_pi_p0(args, states, actions, n_init_states):
                 pi[i, actions.index(s[0])] = 1.0
 
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-        return (pi + 1e-3).log(), p0
+        return (pi + eps).log(), p0
 
 
 def execute(args):
@@ -232,7 +232,7 @@ def execute(args):
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
 
     trials_steps = args['trials_steps']
-    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
+    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states, 1e-3), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
