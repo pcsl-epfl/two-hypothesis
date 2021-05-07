@@ -232,7 +232,7 @@ def execute(args):
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
 
     trials_steps = args['trials_steps']
-    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states, 1e-3), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
+    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states, 1e-4), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
