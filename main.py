@@ -108,6 +108,114 @@ def optimal_u(r, mu, m):
     return eps, q
 
 
+def w_pi_p0(args, states, actions, n_init_states):
+    if args['init'] == 'randn':
+        pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
+        p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
+        return pi, p0
+
+    if args['init'] == 'optimal_u':
+        assert args['memory_type'] == 'ram'
+        e, _ = optimal_u(args['reset'], args['gamma'], args['memory'])
+        e = min(e, 1)
+        pi = torch.zeros(len(states), len(actions), device=args['device'])
+        for i, s in enumerate(states):
+            # s = 44A+
+            # a = 32B
+            x = int(s[:2])
+
+            if s[2:] == "  ":
+                continue
+
+            if x == args['memory'] - 1:
+                if s[-1] == "+":
+                    pi[i, actions.index(s[:-1])] = 1.0
+                else:
+                    pi[i, actions.index(s[:-1])] = 1.0 - e
+                    pi[i, actions.index(f"{x-1:02d}{s[-2]}")] = e
+
+            elif x == 0:
+                if s[-1] == "+":
+                    pi[i, actions.index(f"01{s[-2]}")] = 1.0
+                elif s[-2] == "B":
+                    pi[i, actions.index("00A")] = 1.0
+                elif s[-2] == "A":
+                    pi[i, actions.index("00B")] = 1.0
+
+            else:
+                if s[-1] == "+":
+                    pi[i, actions.index(f"{x+1:02d}{s[-2]}")] = 1.0
+                if s[-1] == "-":
+                    pi[i, actions.index(f"{x-1:02d}{s[-2]}")] = 1.0
+
+        pi[states.index("00  "), actions.index("00A")] = 0.5
+        pi[states.index("00  "), actions.index("00B")] = 0.5
+
+        p0 = torch.zeros(n_init_states, device=args['device'])
+        p0[states.index("00  ")] = 1
+        return (pi + 1e-4).log(), (p0 + 1e-4).log()
+
+    if args['init'] == 'randn_lin':
+        assert args['memory_type'] == 'ram'
+        pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
+        pi = pi.softmax(1)
+        for i, s in enumerate(states):
+            for j, a in enumerate(actions):
+                # s = '44  '
+                # s = '44A+'
+                # a = '32B'
+                if abs(int(s[:2]) - int(a[:2])) > 1:
+                    pi[i, j] = 0.0
+
+        p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
+        pi = (pi / pi.sum(1, True) + 1e-3).log()
+        assert torch.isfinite(pi).all()
+        return pi, p0
+
+    if args['init'] == 'randn_u':
+        assert args['memory_type'] == 'ram'
+        pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
+        pi = pi.softmax(1)
+        for i, s in enumerate(states):
+            for j, a in enumerate(actions):
+                # s = '44  '
+                # s = '44A+'
+                # a = '32B'
+                if abs(int(s[:2]) - int(a[:2])) > 1:
+                    pi[i, j] = 0.0
+
+                if s[2] != ' ' and s[2] != a[2] and int(s[:2]) > 0:
+                    pi[i, j] = 0.0
+
+        p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
+        pi = (pi / pi.sum(1, True) + 1e-3).log()
+        assert torch.isfinite(pi).all()
+        return pi, p0
+
+    if args['init'] == 'randn_cycles':
+        assert args['memory_type'] == 'actions'
+        pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
+        pi = pi.softmax(1)
+        m = args['memory']
+
+        for i, s in enumerate(states):
+            # s = '      '
+            # s = '  A  -'
+            # s = 'AAB++-'
+            # a = B
+            if s[0] == ' ':
+                continue
+
+            x = torch.tensor([{'A': 1.0, 'B': -1.0, '+': 1.0, '-': -1.0, ' ': 0.0}[i] for i in s])
+            # if not full red flag
+            if (x[:m] * x[m:]).var() > 0.0:
+                pi[i] = 0.0
+                pi[i, actions.index(s[0])] = 1.0
+
+        p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
+        return (pi + 1e-3).log(), p0
+
+
 def execute(args):
     torch.set_default_dtype(torch.float64)
     torch.manual_seed(args['seed'])
@@ -123,115 +231,8 @@ def execute(args):
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
 
-    def w_pi_p0():
-        if args['init'] == 'randn':
-            pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
-            p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-            return pi, p0
-
-        if args['init'] == 'optimal_u':
-            assert args['memory_type'] == 'ram'
-            e, _ = optimal_u(args['reset'], args['gamma'], args['memory'])
-            e = min(e, 1)
-            pi = torch.zeros(len(states), len(actions), device=args['device'])
-            for i, s in enumerate(states):
-                # s = 44A+
-                # a = 32B
-                x = int(s[:2])
-
-                if s[2:] == "  ":
-                    continue
-
-                if x == args['memory'] - 1:
-                    if s[-1] == "+":
-                        pi[i, actions.index(s[:-1])] = 1.0
-                    else:
-                        pi[i, actions.index(s[:-1])] = 1.0 - e
-                        pi[i, actions.index(f"{x-1:02d}{s[-2]}")] = e
-
-                elif x == 0:
-                    if s[-1] == "+":
-                        pi[i, actions.index(f"01{s[-2]}")] = 1.0
-                    elif s[-2] == "B":
-                        pi[i, actions.index("00A")] = 1.0
-                    elif s[-2] == "A":
-                        pi[i, actions.index("00B")] = 1.0
-
-                else:
-                    if s[-1] == "+":
-                        pi[i, actions.index(f"{x+1:02d}{s[-2]}")] = 1.0
-                    if s[-1] == "-":
-                        pi[i, actions.index(f"{x-1:02d}{s[-2]}")] = 1.0
-
-            pi[states.index("00  "), actions.index("00A")] = 0.5
-            pi[states.index("00  "), actions.index("00B")] = 0.5
-
-            p0 = torch.zeros(n_init_states, device=args['device'])
-            p0[states.index("00  ")] = 1
-            return (pi + 1e-3).log(), (p0 + 1e-3).log()
-
-        if args['init'] == 'randn_lin':
-            assert args['memory_type'] == 'ram'
-            pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
-            pi = pi.softmax(1)
-            for i, s in enumerate(states):
-                for j, a in enumerate(actions):
-                    # s = '44  '
-                    # s = '44A+'
-                    # a = '32B'
-                    if abs(int(s[:2]) - int(a[:2])) > 1:
-                        pi[i, j] = 0.0
-
-            p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-            pi = (pi / pi.sum(1, True) + 1e-3).log()
-            assert torch.isfinite(pi).all()
-            return pi, p0
-
-        if args['init'] == 'randn_u':
-            assert args['memory_type'] == 'ram'
-            pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
-            pi = pi.softmax(1)
-            for i, s in enumerate(states):
-                for j, a in enumerate(actions):
-                    # s = '44  '
-                    # s = '44A+'
-                    # a = '32B'
-                    if abs(int(s[:2]) - int(a[:2])) > 1:
-                        pi[i, j] = 0.0
-
-                    if s[2] != ' ' and s[2] != a[2] and int(s[:2]) > 0:
-                        pi[i, j] = 0.0
-
-            p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-            pi = (pi / pi.sum(1, True) + 1e-3).log()
-            assert torch.isfinite(pi).all()
-            return pi, p0
-
-        if args['init'] == 'randn_cycles':
-            assert args['memory_type'] == 'actions'
-            pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
-            pi = pi.softmax(1)
-            m = args['memory']
-
-            for i, s in enumerate(states):
-                # s = '      '
-                # s = '  A  -'
-                # s = 'AAB++-'
-                # a = B
-                if s[0] == ' ':
-                    continue
-
-                x = torch.tensor([{'A': 1.0, 'B': -1.0, '+': 1.0, '-': -1.0, ' ': 0.0}[i] for i in s])
-                # if not full red flag
-                if (x[:m] * x[m:]).var() > 0.0:
-                    pi[i] = 0.0
-                    pi[i, actions.index(s[0])] = 1.0
-
-            p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
-            return (pi + 1e-3).log(), p0
-
     trials_steps = args['trials_steps']
-    rs = [last(optimize(args, *w_pi_p0(), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
+    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
 
     while len(rs) > 1:
         rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
