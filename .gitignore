@@ -1,5 +1,6 @@
 *.ipynb
 *.pkl
+*.pk
 info
 stderr
 __pycache__
