@@ -119,6 +119,9 @@ def steadystate(m, eps=1e-6):
         if (m - m[:, [0]]).abs().max().item() < eps:
             return m[:, 0]
 
+        if not torch.isfinite(m).all():
+            return m[:, 0]
+
 
 def avg_gain(rewards, mms, reset, eps, pi, p0):
     g = 0
