@@ -47,6 +47,7 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
     wall_save = perf_counter()
 
     dynamics = []
+    t = 0
 
     for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, rewards, mms, args['reset'], args['eps']), max_dgrad=args['max_dgrad']):
 
@@ -54,7 +55,6 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
         s['ngrad'] = internals['data'].pi_grad.abs().max().item()
         s['gain'] = internals['data'].gain
         s['loss'] = 1 - internals['data'].gain / args['gamma']
-        dynamics.append(s)
 
         if perf_counter() - wall_print > 2:
             wall_print = perf_counter()
@@ -74,6 +74,10 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
         if s['step'] == stop_steps:
             save = True
             stop = True
+
+        if s['t'] >= t or stop:
+            t = 1.05 * s['t']
+            dynamics.append(s)
 
         r = {
             'dynamics': dynamics,
