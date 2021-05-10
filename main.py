@@ -67,9 +67,9 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
             wall_save = perf_counter()
             save = True
 
-        if s['ngrad'] < args['stop_ngrad']:
-            save = True
-            stop = True
+        # if s['ngrad'] < args['stop_ngrad']:
+        #     save = True
+        #     stop = True
 
         if s['step'] == stop_steps:
             save = True
@@ -290,7 +290,7 @@ def main():
     parser.add_argument("--trials_steps", type=int, default=0)
 
     parser.add_argument("--stop_steps", type=int, default=5000)
-    parser.add_argument("--stop_ngrad", type=float, default=1e-8)
+    # parser.add_argument("--stop_ngrad", type=float, default=1e-8)
 
     parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args().__dict__
