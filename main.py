@@ -56,20 +56,12 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
         s['gain'] = internals['data'].gain
         s['loss'] = 1 - internals['data'].gain / args['gamma']
 
-        if perf_counter() - wall_print > 2:
-            wall_print = perf_counter()
-            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} loss={s['loss']:.3f}", flush=True)
-
         save = False
         stop = False
 
         if perf_counter() - wall_save > 10:
             wall_save = perf_counter()
             save = True
-
-        # if s['ngrad'] < args['stop_ngrad']:
-        #     save = True
-        #     stop = True
 
         if s['step'] == stop_steps:
             save = True
@@ -78,6 +70,10 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
         if s['t'] >= t or stop:
             t = 1.05 * s['t']
             dynamics.append(s)
+
+        if perf_counter() - wall_print > 2 or save:
+            wall_print = perf_counter()
+            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} loss={s['loss']:.3f}", flush=True)
 
         r = {
             'dynamics': dynamics,
