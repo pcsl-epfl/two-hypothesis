@@ -41,7 +41,7 @@ def flow_ode(x, grad_fun, max_dgrad):
         yield state, internals
 
 
-def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
+def optimize(args, w_pi, w_p0, mms, rewards, prefix=""):
     wall = perf_counter()
     wall_print = perf_counter()
     wall_save = perf_counter()
@@ -63,7 +63,15 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
             wall_save = perf_counter()
             save = True
 
-        if s['step'] == stop_steps:
+        if s['step'] == args['stop_steps']:
+            save = True
+            stop = True
+
+        if args['stop_t'] is not None and s['t'] >= args['stop_t']:
+            save = True
+            stop = True
+
+        if args['stop_wall'] is not None and s['wall'] >= args['stop_wall']:
             save = True
             stop = True
 
@@ -75,17 +83,15 @@ def optimize(args, w_pi, w_p0, mms, rewards, stop_steps, prefix=""):
             wall_print = perf_counter()
             print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} loss={s['loss']:.3f}", flush=True)
 
-        r = {
-            'dynamics': dynamics,
-            'w_pi': internals['x'][0],
-            'w_p0': internals['x'][1],
-            'pi': internals['x'][0].softmax(1),
-            'p0': internals['x'][1].softmax(0),
-            'stop': stop,
-        }
-
         if save:
-            yield r
+            yield {
+                'dynamics': dynamics,
+                'w_pi': internals['x'][0],
+                'w_p0': internals['x'][1],
+                'pi': internals['x'][0].softmax(1),
+                'p0': internals['x'][1].softmax(0),
+                'stop': stop,
+            }
 
         if stop:
             return
@@ -231,19 +237,19 @@ def execute(args):
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
 
-    trials_steps = args['trials_steps']
-    rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
+    # trials_steps = args['trials_steps']
+    # rs = [last(optimize(args, *w_pi_p0(args, states, actions, n_init_states), mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, args['trials']))) for i in range(args['trials'])]
 
-    while len(rs) > 1:
-        rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
-        print('best gain = {:.3f}'.format(rs[-1]['dynamics'][-1]['gain']))
-        rs = rs[len(rs) // 2:]
-        if len(rs) == 1:
-            break
-        trials_steps = round(trials_steps * 1.5)
-        rs = [last(optimize(args, r['w_pi'], r['w_p0'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
+    # while len(rs) > 1:
+    #     rs = sorted(rs, key=lambda r: r['dynamics'][-1]['gain'])
+    #     print('best gain = {:.3f}'.format(rs[-1]['dynamics'][-1]['gain']))
+    #     rs = rs[len(rs) // 2:]
+    #     if len(rs) == 1:
+    #         break
+    #     trials_steps = round(trials_steps * 1.5)
+    #     rs = [last(optimize(args, r['w_pi'], r['w_p0'], mms, rewards, trials_steps, prefix="TRIAL{}/{} ".format(i, len(rs)))) for i, r in enumerate(rs)]
 
-    for r in optimize(args, rs[0]['w_pi'], rs[0]['w_p0'], mms, rewards, args['stop_steps']):
+    for r in optimize(args, *w_pi_p0(args, states, actions, n_init_states), mms, rewards):
         yield {
             'args': args,
             'states': states,
@@ -283,11 +289,12 @@ def main():
     parser.add_argument("--eps_init", type=float, default=1e-4)
     parser.add_argument("--std0", type=float, default=1)
 
-    parser.add_argument("--trials", type=int, default=1)
-    parser.add_argument("--trials_steps", type=int, default=0)
+    # parser.add_argument("--trials", type=int, default=1)
+    # parser.add_argument("--trials_steps", type=int, default=0)
 
-    parser.add_argument("--stop_steps", type=int, default=5000)
-    # parser.add_argument("--stop_ngrad", type=float, default=1e-8)
+    parser.add_argument("--stop_steps", type=int)
+    parser.add_argument("--stop_wall", type=float)
+    parser.add_argument("--stop_t", type=float)
 
     parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args().__dict__
