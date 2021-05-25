@@ -35,7 +35,7 @@ def init(n_arms, mem, mem_type):
                 return fa if ss[-1] == '+' else 1 - fa
             return 0
 
-    elif mem_type == 'actions':
+    elif mem_type == 'memento':
         actions = arms
         states = []
         for n in range(mem + 1):
@@ -94,7 +94,7 @@ def steadystate(m, eps=1e-6):
             return m[:, 0]
 
 
-def avg_gain(rewards, mms, reset, eps, pi, p0):
+def avg_exp_reward(rewards, mms, reset, eps, pi, p0):
     g = 0
     for mm in mms:
         m = transfer_matrix(pi, mm, reset, p0)
@@ -113,10 +113,10 @@ def grad_fn(rewards, mms, reset, eps, w_pi, w_p0):
     w_p0.requires_grad_()
     p0 = w_p0.softmax(0)
 
-    g = avg_gain(rewards, mms, reset, eps, pi, p0)
+    g = avg_exp_reward(rewards, mms, reset, eps, pi, p0)
     g.backward()
 
-    return collections.namedtuple("Return", "gain, pi_grad, p0_grad")(g.item(), w_pi.grad.clone(), w_p0.grad.clone())
+    return collections.namedtuple("Return", "exp_reward, pi_grad, p0_grad")(g.item(), w_pi.grad.clone(), w_p0.grad.clone())
 
 
 def flow_ode(x, grad_fun, max_dgrad):
@@ -135,7 +135,7 @@ def flow_ode(x, grad_fun, max_dgrad):
         return (w_pi + dt * pre.pi_grad, w_p0 + dt * pre.p0_grad)
 
     def compare(pre, post):
-        if post.gain < pre.gain:
+        if post.exp_reward < pre.exp_reward:
             return 2
         dpi = (pre.pi_grad - post.pi_grad).abs().max()
         dp0 = (pre.p0_grad - post.p0_grad).abs().max()
@@ -154,19 +154,26 @@ def optimize(args, w_pi, w_p0, mms, rewards, prefix=""):
 
     dynamics = []
     t = 0
+    last_saved_q = 0.5
 
-    for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, rewards, mms, args['reset'], args['eps']), max_dgrad=args['max_dgrad']):
+    for s, internals in flow_ode((w_pi, w_p0), partial(grad_fn, rewards, mms, args['reset'], args['eps_power']), max_dgrad=args['max_dgrad']):
 
         s['wall'] = perf_counter() - wall
         s['ngrad'] = internals['data'].pi_grad.abs().max().item()
-        s['gain'] = internals['data'].gain
-        s['loss'] = 1 - internals['data'].gain / args['gamma']
+        s['exp_reward'] = internals['data'].exp_reward
+        s['gain'] = args['reset'] * s['exp_reward']
+        s['q'] = (1 - internals['data'].exp_reward / args['mu']) / 2
 
         save = False
         stop = False
 
+        if s['step'] == 0:
+            save = True
+
         if perf_counter() - wall_save > 10:
-            wall_save = perf_counter()
+            save = True
+
+        if s['q'] < 0.98 * last_saved_q:
             save = True
 
         if s['step'] == args['stop_steps']:
@@ -181,15 +188,18 @@ def optimize(args, w_pi, w_p0, mms, rewards, prefix=""):
             save = True
             stop = True
 
-        if s['t'] >= t or stop:
+        if s['t'] >= t or stop or save:
             t = 1.05 * s['t']
             dynamics.append(s)
 
         if perf_counter() - wall_print > 2 or save:
             wall_print = perf_counter()
-            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} loss={s['loss']:.3f}", flush=True)
+            print(f"{prefix}wall={s['wall']:.0f} step={s['step']} t=({s['t']:.1e})+({s['dt']:.0e}) |dw|={s['ngrad']:.1e} q={s['q']:.5f}", flush=True)
 
         if save:
+            wall_save = perf_counter()
+            last_saved_q = s['q']
+
             yield {
                 'dynamics': dynamics,
                 'w_pi': internals['x'][0],
@@ -228,7 +238,7 @@ def w_pi_p0(args, states, actions, n_init_states):
 
     if args['init'] == 'optimal_u':
         assert args['memory_type'] == 'ram'
-        e, _ = optimal_u(args['reset'], args['gamma'], args['memory'])
+        e, _ = optimal_u(args['reset'], args['mu'], args['memory'])
         e = min(e, 1)
         pi = torch.zeros(len(states), len(actions), device=args['device'])
         for i, s in enumerate(states):
@@ -305,7 +315,7 @@ def w_pi_p0(args, states, actions, n_init_states):
         return pi, p0
 
     if args['init'] == 'randn_cycles':
-        assert args['memory_type'] == 'actions'
+        assert args['memory_type'] == 'memento'
         pi = torch.randn(len(states), len(actions), device=args['device']).mul(args['std0'])
         pi = pi.softmax(1)
         m = args['memory']
@@ -337,8 +347,8 @@ def execute(args):
 
     assert args['arms'] == 2
     fs = torch.tensor([
-        [0.5 - args['gamma']/2, 0.5 + args['gamma']/2],
-        [0.5 + args['gamma']/2, 0.5 - args['gamma']/2],
+        [0.5 - args['mu']/2, 0.5 + args['mu']/2],
+        [0.5 + args['mu']/2, 0.5 - args['mu']/2],
     ])
 
     mms = [master_matrix(states, actions, partial(prob, f)).to(device=args['device']) for f in fs]
@@ -354,7 +364,7 @@ def execute(args):
             'w_p0': r['w_p0'],
             'pi': r['pi'],
             'p0': r['p0'],
-            'steadystates': [steadystate(transfer_matrix(r['pi'], mm, args['reset'], r['p0']), args['eps']) for mm in mms],
+            'steadystates': [steadystate(transfer_matrix(r['pi'], mm, args['reset'], r['p0']), args['eps_power']) for mm in mms],
             'finished': r['stop']
         }
 
@@ -369,7 +379,7 @@ def main():
     parser.add_argument("--device", type=str, default='cpu')
 
     parser.add_argument("--arms", type=int, default=2)
-    parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--mu", type=float, default=0.1)
 
     parser.add_argument("--init", type=str, required=True)
     parser.add_argument("--memory_type", type=str, required=True)
@@ -379,7 +389,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--max_dgrad", type=float, default=1e-4)
-    parser.add_argument("--eps", type=float, default=1e-8)
+    parser.add_argument("--eps_power", type=float, default=1e-8)
     parser.add_argument("--eps_init", type=float, default=1e-4)
     parser.add_argument("--std0", type=float, default=1)
 
