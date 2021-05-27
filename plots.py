@@ -112,7 +112,7 @@ def plot_fig4():
                 d = sample(r['dynamics'])
                 [line] = plt.plot(
                     [x['t'] for x in d],
-                    [x['loss'] / 2 for x in d],
+                    [x['q'] for x in d],
                     color=color,
                     alpha=0.1
                 )
@@ -121,7 +121,7 @@ def plot_fig4():
             ds = [sample(r['dynamics']) for r in rs]
             t, q = interp_median(
                 [[np.log(x['t']) for x in d if x['t'] > 0.0] for d in ds],
-                [[np.log(x['loss'] / 2) for x in d if x['t'] > 0.0] for d in ds]
+                [[np.log(x['q']) for x in d if x['t'] > 0.0] for d in ds]
             )
             plt.plot(np.exp(t), np.exp(q), color=color, **kwargs)
 
@@ -266,7 +266,7 @@ def plot_fig2():
         [line] = plt.plot(
             resets,
             [
-                min([0.5 * r['dynamics'][-1]['loss'] for r in rs if r['args']['reset'] == re])
+                min([r['dynamics'][-1]['q'] for r in rs if r['args']['reset'] == re])
                 for re in resets
             ],
             '.',
@@ -303,7 +303,7 @@ def plot_fig2():
         [line] = plt.plot(
             mems,
             [
-                min([0.5 * r['dynamics'][-1]['loss'] for r in rs if r['args']['memory'] == m])
+                min([r['dynamics'][-1]['q'] for r in rs if r['args']['memory'] == m])
                 for m in mems
             ],
             '.',
