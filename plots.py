@@ -1,11 +1,13 @@
 import numpy as np
+import argparse
 import math
 from itertools import count, islice
 from math import sqrt
 
 import matplotlib.pyplot as plt
 import torch
-from grid import load_grouped, exec_grid
+
+from grid import exec_grid, load_grouped
 from main import optimal_u
 
 torch.set_default_dtype(torch.float64)
@@ -84,13 +86,13 @@ def is_prime(n):
     return n > 1 and all(n % i for i in islice(count(2), int(sqrt(n)-1)))
 
 
-def plot_fig4():
+def plot_fig4(wall, python):
     fig, [[ax11, ax12, ax13], [ax21, ax22, ax23]] = plt.subplots(2, 3, figsize=(5.5, 5), dpi=120, sharex=True, sharey=True)
 
     def plot1(data, memory_type, memory, init, reset, color=None, **kwargs):
         exec_grid(
             data,
-            "srun --time 2:00:00 python main.py --stop_wall 3600 --stop_t 1e9 --mu 0.1",
+            f"{python} main.py --stop_wall {wall} --stop_t 1e9 --mu 0.1",
             [
                 ("init", [init]),
                 ("memory_type", [memory_type]),
@@ -224,10 +226,10 @@ def plot_fig4():
     plt.savefig('fig4.pgf')
 
 
-def plot_fig2():
+def plot_fig2(wall, python):
     exec_grid(
         "ram_opt_reset",
-        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
+        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init optimal_u",
         [
             ("memory", [5, 10, 20]),
             ("mu", [0.1, 0.2]),
@@ -237,7 +239,7 @@ def plot_fig2():
     )
     exec_grid(
         "ram_opt_mem",
-        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
+        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init optimal_u",
         [
             ("mu", [0.1, 0.2]),
             ("reset", [1e-6, 1e-2, 1e-4]),
@@ -326,5 +328,10 @@ def plot_fig2():
 
 
 if __name__ == "__main__":
-    plot_fig4()
-    plot_fig2()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--python", type=str, default='python')
+    parser.add_argument("--wall", type=float)
+    args = parser.parse_args().__dict__
+
+    plot_fig4(args['wall'], args['python'])
+    plot_fig2(args['wall'], args['python'])
