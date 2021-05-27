@@ -96,6 +96,7 @@ def plot_fig4():
                 ("memory_type", [memory_type]),
                 ("memory", [memory]),
                 ("reset", [reset]),
+                ("seed", [i for i in range(20)]),
             ],
             n=100,
         )
