@@ -223,7 +223,7 @@ def plot_fig4(wall, python):
     plt.annotate("F", (1e1, 0.4))
 
     plt.tight_layout(h_pad=0.2, w_pad=-3)
-    plt.savefig('fig4.pgf')
+    plt.savefig('fig4.png')
 
 
 def plot_fig2(wall, python):
@@ -324,13 +324,13 @@ def plot_fig2(wall, python):
     plt.xlabel('$M$')
 
     plt.tight_layout(pad=1)
-    plt.savefig('fig2.pgf')
+    plt.savefig('fig2.png')
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--python", type=str, default='python')
-    parser.add_argument("--wall", type=float, default=3600)
+    parser.add_argument("--wall", type=float, default=120)
     args = parser.parse_args().__dict__
 
     plot_fig4(args['wall'], args['python'])
