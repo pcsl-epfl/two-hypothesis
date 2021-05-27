@@ -168,13 +168,13 @@ def plot_fig4(wall, python, threads):
     plt.sca(ax13)
     plot1('glassy', memory_type='memento', memory=3, init='randn', label='Memento random', reset=1e-5)
     args = plot1('glassy', memory_type='ram', memory=16, init='randn', label='RAM random', reset=1e-5)
-    q, e = optimal_u(args['reset'], args['gamma'], args['memory'])
+    q, e = optimal_u(args['reset'], args['mu'], args['memory'])
     plt.plot([0, 1e13], [q, q], '--k', label='optimal')
 
     plt.sca(ax23)
     plot1('glassy', memory_type='memento', memory=4, init='randn', label='Memento random', reset=1e-5)
     args = plot1('glassy', memory_type='ram', memory=64, init='randn', label='RAM random', reset=1e-5)
-    q, e = optimal_u(args['reset'], args['gamma'], args['memory'])
+    q, e = optimal_u(args['reset'], args['mu'], args['memory'])
     plt.plot([1e0, 1e19], [q, q], '--k', label='optimal')
 
     for ax in [ax11, ax21, ax12, ax22, ax13, ax23]:
@@ -260,7 +260,7 @@ def plot_fig2(wall, python, threads):
         group_by=['seed', 'reset', 'stop_wall']
     )
 
-    for a, rs in sorted(groups, key=lambda x: x[0]['gamma']):
+    for a, rs in sorted(groups, key=lambda x: x[0]['mu']):
         resets = sorted({r['args']['reset'] for r in rs})
 
         color = {
@@ -270,7 +270,7 @@ def plot_fig2(wall, python, threads):
             (0.2, 10): '#68DD74',
             (0.2, 20): '#1E6625',
             (0.2, 5): '#B6D657',
-        }[(a['gamma'], a['memory'])]
+        }[(a['mu'], a['memory'])]
 
         [line] = plt.plot(
             resets,
@@ -279,11 +279,11 @@ def plot_fig2(wall, python, threads):
                 for re in resets
             ],
             '.',
-            label=fr"$\mu={a['gamma']} \quad M={a['memory']}$",
+            label=fr"$\mu={a['mu']} \quad M={a['memory']}$",
             color=color,
         )
         r = torch.logspace(-7, 0, 100)
-        mu = a['gamma']
+        mu = a['mu']
         m = a['memory']
         plt.plot(r, optimal_u(r, mu, m)[1], color=line.get_color())
 
@@ -297,7 +297,7 @@ def plot_fig2(wall, python, threads):
     plt.sca(ax2)
     args, groups = load_grouped('ram_opt_mem', group_by=['seed', 'memory', 'stop_wall'])
 
-    for a, rs in sorted(groups, key=lambda x: x[0]['gamma']):
+    for a, rs in sorted(groups, key=lambda x: x[0]['mu']):
         mems = sorted({r['args']['memory'] for r in rs})
 
         color = {
@@ -307,7 +307,7 @@ def plot_fig2(wall, python, threads):
             (0.2, 1e-6): '#68DD74',
             (0.2, 1e-4): '#1E6625',
             (0.2, 1e-2): '#B6D657',
-        }[(a['gamma'], a['reset'])]
+        }[(a['mu'], a['reset'])]
 
         [line] = plt.plot(
             mems,
@@ -316,11 +316,11 @@ def plot_fig2(wall, python, threads):
                 for m in mems
             ],
             '.',
-            label=fr"$\mu={a['gamma']} \quad r={texnum(a['reset'])}$",
+            label=fr"$\mu={a['mu']} \quad r={texnum(a['reset'])}$",
             color=color,
         )
         m = torch.logspace(0, 2, 100)
-        mu = a['gamma']
+        mu = a['mu']
         r = a['reset']
         plt.plot(m, optimal_u(r, mu, m)[1], color=line.get_color())
 
