@@ -330,7 +330,7 @@ def plot_fig2(wall, python):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--python", type=str, default='python')
-    parser.add_argument("--wall", type=float)
+    parser.add_argument("--wall", type=float, default=3600)
     args = parser.parse_args().__dict__
 
     plot_fig4(args['wall'], args['python'])
