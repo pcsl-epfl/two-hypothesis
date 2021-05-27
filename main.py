@@ -1,3 +1,4 @@
+import numpy  # noqa
 import argparse
 import collections
 import itertools

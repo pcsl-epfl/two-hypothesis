@@ -1,9 +1,9 @@
+import numpy as np
 import math
 from itertools import count, islice
 from math import sqrt
 
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 from grid import load_grouped, exec_grid
 from main import optimal_u
@@ -87,9 +87,21 @@ def is_prime(n):
 def plot_fig4():
     fig, [[ax11, ax12, ax13], [ax21, ax22, ax23]] = plt.subplots(2, 3, figsize=(5.5, 5), dpi=120, sharex=True, sharey=True)
 
-    def plot1(data, memory, init, color=None, **kwargs):
+    def plot1(data, memory_type, memory, init, reset, color=None, **kwargs):
+        exec_grid(
+            data,
+            "srun --time 2:00:00 python main.py --stop_wall 3600 --stop_t 1e9 --mu 0.1",
+            [
+                ("init", [init]),
+                ("memory_type", [memory_type]),
+                ("memory", [memory]),
+                ("reset", [reset]),
+            ],
+            n=100,
+        )
+
         def pred_args(a):
-            return a['memory'] == memory and a['init'] == init
+            return a['memory_type'] == memory_type and a['memory'] == memory and a['init'] == init and a['reset'] == reset
 
         args, groups = load_grouped(data, group_by=['seed', 'stop_t', 'stop_wall', 'stop_steps', 'stop_ngrad', 'eps_init', 'trials_steps', 'trials'], pred_args=pred_args)
         assert len(groups) == 1, groups[0][0].keys()
@@ -121,7 +133,7 @@ def plot_fig4():
         ('randn_u', 'RAM c.c.'),
         ('optimal_u', 'RAM optimal'),
     ]:
-        plot1('glassy_ram_', memory=8, init=init, label=label)
+        plot1('glassy', memory_type='ram', memory=8, init=init, label=label, reset=1e-3)
 
     plt.sca(ax21)
     for init, label in [
@@ -130,31 +142,31 @@ def plot_fig4():
         ('randn_u', 'RAM c.c.'),
         ('optimal_u', 'RAM optimal'),
     ]:
-        plot1('glassy_ram_', memory=20, init=init, label=label)
+        plot1('glassy', memory_type='ram', memory=20, init=init, label=label, reset=1e-3)
 
     plt.sca(ax12)
     for init, label in [
         ('randn', 'Memento random'),
         ('randn_cycles', 'Memento cycles'),
     ]:
-        plot1('glassy_actions_', memory=3, init=init, label=label)
+        plot1('glassy', memory_type='memento', memory=3, init=init, label=label, reset=1e-3)
 
     plt.sca(ax22)
     for init, label in [
         ('randn', 'Memento random'),
         ('randn_cycles', 'Memento cycles'),
     ]:
-        plot1('glassy_actions_', memory=4, init=init, label=label)
+        plot1('glassy', memory_type='memento', memory=4, init=init, label=label, reset=1e-3)
 
     plt.sca(ax13)
-    plot1('glassy_actions__', memory=3, init='randn', label='Memento random')
-    args = plot1('glassy_ram__', memory=16, init='randn', label='RAM random')
+    plot1('glassy', memory_type='memento', memory=3, init='randn', label='Memento random', reset=1e-5)
+    args = plot1('glassy', memory_type='ram', memory=16, init='randn', label='RAM random', reset=1e-5)
     q, e = optimal_u(args['reset'], args['gamma'], args['memory'])
     plt.plot([0, 1e13], [q, q], '--k', label='optimal')
 
     plt.sca(ax23)
-    plot1('glassy_actions__', memory=4, init='randn', label='Memento random')
-    args = plot1('glassy_ram__', memory=64, init='randn', label='RAM random')
+    plot1('glassy', memory_type='memento', memory=4, init='randn', label='Memento random', reset=1e-5)
+    args = plot1('glassy', memory_type='ram', memory=64, init='randn', label='RAM random', reset=1e-5)
     q, e = optimal_u(args['reset'], args['gamma'], args['memory'])
     plt.plot([1e0, 1e19], [q, q], '--k', label='optimal')
 
@@ -212,6 +224,26 @@ def plot_fig4():
 
 
 def plot_fig2():
+    exec_grid(
+        "ram_opt_reset",
+        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
+        [
+            ("memory", [5, 10, 20]),
+            ("mu", [0.1, 0.2]),
+            ("reset", [2**i for i in range(-20, 0)]),
+        ],
+        n=100,
+    )
+    exec_grid(
+        "ram_opt_mem",
+        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
+        [
+            ("mu", [0.1, 0.2]),
+            ("reset", [1e-6, 1e-2, 1e-4]),
+            ("memory", [1, 2, 3, 4, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 33, 37]),
+        ],
+        n=100,
+    )
 
     fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(5.5, 2.5), dpi=100, sharey=True)
 
@@ -293,25 +325,5 @@ def plot_fig2():
 
 
 if __name__ == "__main__":
-    # plot_fig4()
-    exec_grid(
-        "ram_opt_reset",
-        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
-        [
-            ("memory", [5, 10, 20]),
-            ("mu", [0.1, 0.2]),
-            ("reset", [2**i for i in range(-20, 0)]),
-        ],
-        n=100,
-    )
-    exec_grid(
-        "ram_opt_mem",
-        "srun --time 2:00:00 python main.py --memory_type ram --stop_wall 3600 --stop_t 1e9 --init optimal_u",
-        [
-            ("mu", [0.1, 0.2]),
-            ("reset", [1e-6, 1e-2, 1e-4]),
-            ("memory", [1, 2, 3, 4, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 33, 37]),
-        ],
-        n=100,
-    )
+    plot_fig4()
     plot_fig2()
