@@ -86,7 +86,7 @@ def is_prime(n):
     return n > 1 and all(n % i for i in islice(count(2), int(sqrt(n)-1)))
 
 
-def plot_fig4(wall, python):
+def plot_fig4(wall, python, threads):
     fig, [[ax11, ax12, ax13], [ax21, ax22, ax23]] = plt.subplots(2, 3, figsize=(5.5, 5), dpi=120, sharex=True, sharey=True)
 
     def plot1(data, memory_type, memory, init, reset, color=None, **kwargs):
@@ -100,13 +100,17 @@ def plot_fig4(wall, python):
                 ("reset", [reset]),
                 ("seed", [i for i in range(20)]),
             ],
-            n=100,
+            n=threads,
         )
 
         def pred_args(a):
             return a['memory_type'] == memory_type and a['memory'] == memory and a['init'] == init and a['reset'] == reset
 
-        args, groups = load_grouped(data, group_by=['seed', 'stop_t', 'stop_wall', 'stop_steps', 'stop_ngrad', 'eps_init', 'trials_steps', 'trials'], pred_args=pred_args)
+        args, groups = load_grouped(
+            data,
+            group_by=['seed', 'stop_t', 'stop_wall', 'stop_steps'],
+            pred_args=pred_args
+        )
         assert len(groups) == 1, groups[0][0].keys()
 
         for a, rs in groups:
@@ -226,7 +230,7 @@ def plot_fig4(wall, python):
     plt.savefig('fig4.png')
 
 
-def plot_fig2(wall, python):
+def plot_fig2(wall, python, threads):
     exec_grid(
         "ram_opt_reset",
         f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init optimal_u",
@@ -235,7 +239,7 @@ def plot_fig2(wall, python):
             ("mu", [0.1, 0.2]),
             ("reset", [2**i for i in range(-20, 0)]),
         ],
-        n=100,
+        n=threads,
     )
     exec_grid(
         "ram_opt_mem",
@@ -245,13 +249,16 @@ def plot_fig2(wall, python):
             ("reset", [1e-6, 1e-2, 1e-4]),
             ("memory", [1, 2, 3, 4, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 33, 37]),
         ],
-        n=100,
+        n=threads,
     )
 
     fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(5.5, 2.5), dpi=100, sharey=True)
 
     plt.sca(ax1)
-    args, groups = load_grouped('ram_opt_reset', group_by=['seed', 'reset', 'eps', 'stop_ngrad', 'max_dgrad', 'stop_steps'])
+    args, groups = load_grouped(
+        'ram_opt_reset',
+        group_by=['seed', 'reset', 'stop_wall']
+    )
 
     for a, rs in sorted(groups, key=lambda x: x[0]['gamma']):
         resets = sorted({r['args']['reset'] for r in rs})
@@ -288,7 +295,7 @@ def plot_fig2(wall, python):
     plt.ylabel('$q$')
 
     plt.sca(ax2)
-    args, groups = load_grouped('ram_opt_mem', group_by=['seed', 'memory'])
+    args, groups = load_grouped('ram_opt_mem', group_by=['seed', 'memory', 'stop_wall'])
 
     for a, rs in sorted(groups, key=lambda x: x[0]['gamma']):
         mems = sorted({r['args']['memory'] for r in rs})
@@ -331,7 +338,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--python", type=str, default='python')
     parser.add_argument("--wall", type=float, default=120)
+    parser.add_argument("--threads", type=int, default=1)
     args = parser.parse_args().__dict__
 
-    plot_fig4(args['wall'], args['python'])
-    plot_fig2(args['wall'], args['python'])
+    plot_fig4(args['wall'], args['python'], args['threads'])
+    plot_fig2(args['wall'], args['python'], args['threads'])

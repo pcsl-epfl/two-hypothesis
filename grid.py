@@ -151,19 +151,6 @@ def args_union(argss):
     }
 
 
-def args_diff(argss):
-    args = args_intersection(argss)
-    argss = [args_todict(r) for r in argss]
-    return [
-        {
-            key: a[key]
-            for key in a.keys()
-            if key not in args.keys()
-        }
-        for a in argss
-    ]
-
-
 def get_args_item(args, key):
     if hasattr(args, key):
         return getattr(args, key)
@@ -232,19 +219,6 @@ def to_dict(x):
         return x
 
     return x.__dict__
-
-
-def load_data(f):
-    for _ in range(5):
-        try:
-            with open(f, 'rb') as rb:
-                pickle.load(rb)
-                return pickle.load(rb)
-        except:
-            time.sleep(0.1)
-    with open(f, 'rb') as rb:
-        pickle.load(rb)
-        return pickle.load(rb)
 
 
 def print_output(out, text, path):
@@ -362,66 +336,3 @@ def exec_grid(log_dir, cmd, params, sleep=0, n=None):
 
     for t in threads:
         t.join()
-
-
-def exec_one(log_dir, cmd, param):
-    command = "{} --output {{output}}".format(cmd)
-
-    for name, _val in param:
-        command += " --{0} {{{0}}}".format(name)
-
-    if not os.path.isdir(log_dir):
-        os.mkdir(log_dir)
-
-    done_files = set()
-    done_param = dict()
-
-    for f in tqdm(glob.glob(os.path.join(log_dir, "*.pk"))):
-        if f not in done_files:
-            done_files.add(f)
-
-            a = to_dict(load_args(f))
-            a = tuple((name, a[name] if name in a else None) for name, _vals in param)
-            done_param[a] = f
-
-    if param in done_param:
-        f = done_param[param]
-        def ret(load):
-            if load:
-                while True:
-                    try:
-                        r = load_data(f)
-                    except EOFError:
-                        time.sleep(1)
-                    else:
-                        return r
-        return ret
-
-    for i in count(random.randint(0, 999_999)):
-        i = i % 1_000_000
-        fn = "{:06d}.pk".format(i)
-        fp = os.path.join(log_dir, fn)
-        if not os.path.isfile(fp):
-            break
-
-    cmd = command.format(output=fp, **dict(param))
-
-    p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    text = " ".join("{}={}".format(name, val) for name, val in param)
-
-    t1 = threading.Thread(target=print_output, args=(p.stdout, text, None))
-    t1.daemon = True
-    t1.start()
-    t2 = threading.Thread(target=print_output, args=(p.stderr, text, os.path.join(log_dir, 'stderr')))
-    t2.daemon = True
-    t2.start()
-
-    def ret(load):
-        p.wait()
-        t1.join()
-        t2.join()
-
-        if load:
-            return load_data(fp)
-    return ret
