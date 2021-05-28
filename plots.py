@@ -7,7 +7,7 @@ from math import sqrt
 import matplotlib.pyplot as plt
 import torch
 
-from grid import exec_grid, load_grouped
+from dispatch import exec_grid, load_grouped
 from main import ccp
 
 torch.set_default_dtype(torch.float64)
