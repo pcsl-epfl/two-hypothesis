@@ -221,7 +221,7 @@ def last(i):
     return x
 
 
-def optimal_u(r, mu, m):
+def ccp(r, mu, m):
     try:
         Sqrt = lambda x: x**0.5
         w1 = (-1 + Sqrt(1 + (-1 + r)**2*(-1 + mu**2)))/((-1 + r)*(1 + mu))
@@ -240,9 +240,9 @@ def w_pi_p0(args, states, actions, n_init_states):
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
         return pi, p0
 
-    if args['init'] == 'optimal_u':
+    if args['init'] == 'ccp':
         assert args['memory_type'] == 'ram'
-        e, _ = optimal_u(args['reset'], args['mu'], args['memory'])
+        e, _ = ccp(args['reset'], args['mu'], args['memory'])
         e = min(e, 1)
         pi = torch.zeros(len(states), len(actions), device=args['device'])
         for i, s in enumerate(states):
@@ -337,6 +337,48 @@ def w_pi_p0(args, states, actions, n_init_states):
             if (x[:m] * x[m:]).var() > 0.0:
                 pi[i] = 0.0
                 pi[i, actions.index(s[0])] = 1.0
+
+        p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
+        return (pi + args['eps_init']).log(), p0
+
+    if args['init'] == 'necklace':
+        assert args['memory_type'] == 'memento'
+        assert args['memory'] in [3, 4]
+        pi = torch.zeros(len(states), len(actions), device=args['device'])
+        m = args['memory']
+
+        for i, s in enumerate(states):
+            # s = '      '
+            # s = '  A  -'
+            # s = 'AAB++-'
+            # a = B
+            if s[0] == ' ':
+                pi[i] = 0.5
+            else:
+                pi[i] = 0.0
+                pi[i, actions.index(s[0])] = 1.0
+
+        e0 = args['reset']**0.5
+        e1 = args['reset']**0.25
+        if args['memory'] == 3:
+            pi[states.index('AAA---'), actions.index('B')] = e0
+            pi[states.index('BAA-++'), actions.index('A')] = e1
+            pi[states.index('ABA-+-'), actions.index('B')] = e1
+            pi[states.index('BAB-+-'), actions.index('A')] = e1
+            pi[states.index('ABB-++'), actions.index('B')] = e1
+            pi[states.index('BBB---'), actions.index('A')] = e0
+
+        if args['memory'] == 4:
+            pi[states.index('AAAA----'), actions.index('B')] = e0
+            pi[states.index('BAAA-+++'), actions.index('A')] = e1
+
+            pi[states.index('ABAA-+--'), actions.index('B')] = e1
+            pi[states.index('BAAB-++-'), actions.index('A')] = e1
+            pi[states.index('ABBA-++-'), actions.index('B')] = e1
+            pi[states.index('BABB-+--'), actions.index('A')] = e1
+
+            pi[states.index('ABBB-+++'), actions.index('B')] = e1
+            pi[states.index('BBBB----'), actions.index('A')] = e0
 
         p0 = torch.randn(n_init_states, device=args['device']).mul(args['std0'])
         return (pi + args['eps_init']).log(), p0

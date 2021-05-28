@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from grid import exec_grid, load_grouped
-from main import optimal_u
+from main import ccp
 
 torch.set_default_dtype(torch.float64)
 
@@ -137,8 +137,8 @@ def plot_fig4(wall, python, threads):
     for init, label in [
         ('randn', 'RAM random'),
         ('randn_lin', 'RAM linear'),
-        ('randn_u', 'RAM c.c.'),
-        ('optimal_u', 'RAM optimal'),
+        ('randn_u', 'RAM columns'),
+        ('ccp', 'RAM CCP'),
     ]:
         plot1('glassy', memory_type='ram', memory=8, init=init, label=label, reset=1e-3)
 
@@ -146,8 +146,8 @@ def plot_fig4(wall, python, threads):
     for init, label in [
         ('randn', 'RAM random'),
         ('randn_lin', 'RAM linear'),
-        ('randn_u', 'RAM c.c.'),
-        ('optimal_u', 'RAM optimal'),
+        ('randn_u', 'RAM columns'),
+        ('ccp', 'RAM CCP'),
     ]:
         plot1('glassy', memory_type='ram', memory=20, init=init, label=label, reset=1e-3)
 
@@ -168,13 +168,13 @@ def plot_fig4(wall, python, threads):
     plt.sca(ax13)
     plot1('glassy', memory_type='memento', memory=3, init='randn', label='Memento random', reset=1e-5)
     args = plot1('glassy', memory_type='ram', memory=16, init='randn', label='RAM random', reset=1e-5)
-    q, e = optimal_u(args['reset'], args['mu'], args['memory'])
+    q, e = ccp(args['reset'], args['mu'], args['memory'])
     plt.plot([0, 1e13], [q, q], '--k', label='optimal')
 
     plt.sca(ax23)
     plot1('glassy', memory_type='memento', memory=4, init='randn', label='Memento random', reset=1e-5)
     args = plot1('glassy', memory_type='ram', memory=64, init='randn', label='RAM random', reset=1e-5)
-    q, e = optimal_u(args['reset'], args['mu'], args['memory'])
+    q, e = ccp(args['reset'], args['mu'], args['memory'])
     plt.plot([1e0, 1e19], [q, q], '--k', label='optimal')
 
     for ax in [ax11, ax21, ax12, ax22, ax13, ax23]:
@@ -233,7 +233,7 @@ def plot_fig4(wall, python, threads):
 def plot_fig2(wall, python, threads):
     exec_grid(
         "ram_opt_reset",
-        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init optimal_u",
+        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init ccp",
         [
             ("memory", [5, 10, 20]),
             ("mu", [0.1, 0.2]),
@@ -243,7 +243,7 @@ def plot_fig2(wall, python, threads):
     )
     exec_grid(
         "ram_opt_mem",
-        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init optimal_u",
+        f"{python} main.py --memory_type ram --stop_wall {wall} --stop_t 1e9 --init ccp",
         [
             ("mu", [0.1, 0.2]),
             ("reset", [1e-6, 1e-2, 1e-4]),
@@ -285,7 +285,7 @@ def plot_fig2(wall, python, threads):
         r = torch.logspace(-7, 0, 100)
         mu = a['mu']
         m = a['memory']
-        plt.plot(r, optimal_u(r, mu, m)[1], color=line.get_color())
+        plt.plot(r, ccp(r, mu, m)[1], color=line.get_color())
 
     plt.xlim(min(r['args']['reset'] for r in rs), 1)
     plt.legend(handlelength=0.5, labelspacing=0)
@@ -322,7 +322,7 @@ def plot_fig2(wall, python, threads):
         m = torch.logspace(0, 2, 100)
         mu = a['mu']
         r = a['reset']
-        plt.plot(m, optimal_u(r, mu, m)[1], color=line.get_color())
+        plt.plot(m, ccp(r, mu, m)[1], color=line.get_color())
 
     plt.xlim(1, max(r['args']['memory'] for r in rs))
     plt.legend(handlelength=0.5, labelspacing=-0.2)
