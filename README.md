@@ -1,4 +1,4 @@
-# bandit
+# two-hypothesis
 
 ## requirements
 
@@ -34,6 +34,6 @@ conda install pytorch torchvision torchaudio cpuonly -c pytorch
 conda install matplotlib
 pip install git+https://github.com/mariogeiger/gradientflow
 
-# clone this (bandit) repository
+# clone this repository
 python plots.py
 ```
